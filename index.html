@@ -47,7 +47,7 @@
       z-index: 20;
     }
     .nav-inner {
-      max-width: 1000px;
+      max-width: 1020px;
       width: 100%;
       display: flex;
       align-items: center;
@@ -97,17 +97,22 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     }
 
-    .pills { display: flex; gap: 8px; align-items: center; }
+    .pills { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .pill {
+      display: inline-flex; align-items: center; gap: 6px;
       font-size: 12px; font-weight: 700; padding: 5px 10px;
       border-radius: 999px; background: var(--card-alt);
       border: 1px solid var(--border); color: var(--muted);
     }
     .pill.online { background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399; }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #10b981; box-shadow: 0 0 6px #10b981;
+    }
 
     /* MAIN ARENA LAYOUT */
     .arena {
-      max-width: 1000px;
+      max-width: 1020px;
       width: 100%;
       padding: 20px 16px;
       display: grid;
@@ -221,7 +226,6 @@
     .light .coord { color: var(--sq-dark); }
     .dark .coord { color: var(--sq-light); }
 
-    /* FIXED-PROPORTION VECTOR CHESS PIECES */
     .piece-svg {
       width: 78%;
       height: 78%;
@@ -231,7 +235,6 @@
       filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
     }
 
-    /* CHECKERS & CONNECT 4 PIECES */
     .chk-disc {
       width: 75%; height: 75%; border-radius: 50%; z-index: 1;
       display: flex; align-items: center; justify-content: center;
@@ -277,6 +280,7 @@
       gap: 10px;
     }
     .panel-label {
+      display: flex; justify-content: space-between; align-items: center;
       font-size: 11px; font-weight: 800; text-transform: uppercase;
       letter-spacing: 0.8px; color: var(--muted);
     }
@@ -295,6 +299,10 @@
       border: none; color: #ffffff; font-size: 15px; padding: 12px;
     }
     button.btn.cta:hover { filter: brightness(1.1); }
+    button.btn.spectate-active {
+      border-color: #fbbf24;
+      color: #fbbf24;
+    }
     button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .status-pill {
@@ -311,7 +319,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      height: 155px;
+      height: 150px;
       overflow-y: auto;
       padding: 8px;
       font-size: 13px;
@@ -339,7 +347,8 @@
     </div>
 
     <div class="pills">
-      <span class="pill" id="netBadge">Offline</span>
+      <span class="pill online" id="onlineCountBadge"><span class="live-dot"></span><span id="onlineCountText">1 Online</span></span>
+      <span class="pill" id="netBadge">Connecting...</span>
       <span class="pill" id="guestBadge">guest_0000</span>
     </div>
   </div>
@@ -381,7 +390,11 @@
   <!-- RIGHT: MATCHMAKING & LOGS -->
   <div class="dock">
     <div class="panel">
-      <div class="panel-label">Play Mode</div>
+      <div class="panel-label">
+        <span>Arena Modes</span>
+        <span id="engineBadge" style="color:#38bdf8;">Engine: Loading...</span>
+      </div>
+
       <div class="row-2">
         <select id="timeSelect">
           <option value="180">3 min Blitz</option>
@@ -389,7 +402,17 @@
           <option value="600">10 min Rapid</option>
           <option value="0">Untimed</option>
         </select>
+        <select id="botLevelSelect">
+          <option value="1">Bot: Casual</option>
+          <option value="2">Bot: Club</option>
+          <option value="3" selected>Bot: Master</option>
+          <option value="4">Bot: Stockfish GM</option>
+        </select>
+      </div>
+
+      <div class="row-2">
         <button class="btn" onclick="startLocalBot()">Play vs Bot</button>
+        <button class="btn" id="btnSpectate" onclick="startSpectateBots()">Spectate Bots</button>
       </div>
 
       <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
@@ -471,7 +494,47 @@ function playSound(type) {
 }
 
 // ==========================================
-// 2. CRISP VECTOR SVG CHESS PIECES
+// 2. STOCKFISH WEB WORKER + FALLBACK AI
+// ==========================================
+let sfWorker = null;
+let sfReady = false;
+let sfCallback = null;
+
+async function initStockfish() {
+  const badge = document.getElementById("engineBadge");
+  try {
+    const resp = await fetch("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js");
+    if (!resp.ok) throw new Error("Fetch failed");
+    const code = await resp.text();
+    const blobUrl = URL.createObjectURL(new Blob([code], { type: "application/javascript" }));
+    sfWorker = new Worker(blobUrl);
+
+    sfWorker.onmessage = (e) => {
+      const line = String(e.data || "");
+      if (line === "uciok") {
+        sfWorker.postMessage("isready");
+      } else if (line === "readyok") {
+        sfReady = true;
+        badge.textContent = "Stockfish Ready";
+      } else if (line.startsWith("bestmove")) {
+        const parts = line.split(" ");
+        const uci = parts[1];
+        if (sfCallback && uci && uci !== "(none)") {
+          const cb = sfCallback;
+          sfCallback = null;
+          cb(uci);
+        }
+      }
+    };
+    sfWorker.postMessage("uci");
+  } catch (err) {
+    badge.textContent = "Built-in AI Ready";
+  }
+}
+initStockfish();
+
+// ==========================================
+// 3. CRISP VECTOR SVG CHESS PIECES
 // ==========================================
 function getPieceSVG(color, type, cls = "piece-svg") {
   const fill = color === "w" ? "#ffffff" : "#1e293b";
@@ -490,10 +553,11 @@ function getPieceSVG(color, type, cls = "piece-svg") {
 }
 
 // ==========================================
-// 3. GAME STATE & TOP TAB SWITCHER
+// 4. GAME STATE & TOP TAB SWITCHER
 // ==========================================
+let currentMatchId = 0;
 let selectedGame = "chess";
-let mode = "bot";
+let mode = "bot"; // "bot" | "spectate" | "host" | "guest"
 let mySide = 1;
 let gameType = "chess";
 let baseTime = 180;
@@ -501,7 +565,8 @@ let clocks = { 1: 180, 2: 180 };
 let clockTimer = null;
 let winner = 0;
 let endReason = "";
-let opponentName = "Minimax Bot";
+let bottomTitle = `${guestId} (You)`;
+let opponentName = "Stockfish Bot";
 let selected = null;
 let legalTargets = [];
 let lastMove = null;
@@ -513,30 +578,22 @@ let chkTurn = 1;
 let c4Board = [];
 let c4Turn = 1;
 
-const BROKERS = [
-  "wss://mqtt.eclipseprojects.io:443/mqtt",
-  "wss://broker.emqx.io:8084/mqtt",
-  "wss://broker.hivemq.com:8884/mqtt"
-];
-let mqttClient = null;
-let lobbyTopic = "";
-let roomTopic = "";
-let searching = false;
-let seekTimer = null;
-
-const PIECE_VAL = { p:1, n:3, b:3, r:5, q:9, k:0 };
+const PIECE_VAL = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
 
 function selectGame(g) {
   selectedGame = g;
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
   document.getElementById("tab-" + g).classList.add("active");
-  startLocalBot();
+  if (mode === "spectate") startSpectateBots();
+  else startLocalBot();
 }
 
 // ==========================================
-// 4. INITIALIZE & CLOCK MANAGEMENT
+// 5. INITIALIZE & CLOCK MANAGEMENT
 // ==========================================
-function initMatch(gType, tSec, oppName, side) {
+function initMatch(gType, tSec, oppName, side, botTitleOverride = null) {
+  currentMatchId++;
+  sfCallback = null;
   gameType = gType;
   selectedGame = gType;
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -547,6 +604,7 @@ function initMatch(gType, tSec, oppName, side) {
   winner = 0;
   endReason = "";
   opponentName = oppName;
+  bottomTitle = botTitleOverride || `${guestId} (You)`;
   mySide = side;
   selected = null;
   legalTargets = [];
@@ -571,8 +629,9 @@ function initMatch(gType, tSec, oppName, side) {
     c4Board = Array.from({ length: 6 }, () => Array(7).fill(0));
   }
 
-  document.getElementById("btnDraw").disabled = (mode === "bot");
-  document.getElementById("btnResign").disabled = false;
+  document.getElementById("btnSpectate").classList.toggle("spectate-active", mode === "spectate");
+  document.getElementById("btnDraw").disabled = (mode === "bot" || mode === "spectate");
+  document.getElementById("btnResign").disabled = (mode === "spectate");
   document.getElementById("btnRematch").disabled = false;
 
   startClockLoop();
@@ -615,67 +674,104 @@ function finishMatch(winSide, reason) {
 }
 
 // ==========================================
-// 5. SCHOOL-WIFI FRIENDLY WSS NETWORKING
+// 6. GLOBAL RELAY + LIVE ONLINE PLAYER COUNTER
 // ==========================================
+const BROKERS = [
+  "wss://mqtt.eclipseprojects.io:443/mqtt",
+  "wss://broker.emqx.io:8084/mqtt",
+  "wss://broker.hivemq.com:8884/mqtt"
+];
+const PRESENCE_TOPIC = "boardhub/v1/presence";
+let mqttClient = null;
+let lobbyTopic = "";
+let roomTopic = "";
+let searching = false;
+let seekTimer = null;
+let onlinePeers = new Map();
+let lastPresenceReply = 0;
+
+function updateOnlineCounterUI() {
+  onlinePeers.set(myClientId, Date.now());
+  const now = Date.now();
+  for (const [id, ts] of onlinePeers.entries()) {
+    if (id !== myClientId && now - ts > 24000) {
+      onlinePeers.delete(id);
+    }
+  }
+  const count = Math.max(1, onlinePeers.size);
+  document.getElementById("onlineCountText").textContent = `${count} Online`;
+}
+
+function sendHeartbeat() {
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(PRESENCE_TOPIC, JSON.stringify({ type: "hb", id: myClientId }));
+  }
+  updateOnlineCounterUI();
+}
+
+setInterval(sendHeartbeat, 8000);
+
 function setNetStatus(text, isOnline) {
   const el = document.getElementById("netBadge");
   el.textContent = text;
   el.className = "pill" + (isOnline ? " online" : "");
 }
 
-function cleanupNet() {
-  searching = false;
-  if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
-  document.getElementById("btnQuick").textContent = "Find Online Match";
-  lobbyTopic = "";
-  roomTopic = "";
-  if (mqttClient) {
-    try { mqttClient.end(true); } catch (e) {}
-    mqttClient = null;
+function connectGlobalRelay(onReady = null, brokerIdx = 0) {
+  if (mqttClient && mqttClient.connected) {
+    if (onReady) onReady();
+    return;
   }
-  setNetStatus("Offline", false);
-}
-
-function connectRelay(onConnected, brokerIdx = 0) {
   if (brokerIdx >= BROKERS.length) {
-    setNetStatus("Blocked", false);
-    setBanner("Network blocked relays — try Play vs Bot");
-    cleanupNet();
+    setNetStatus("Local Only", false);
     return;
   }
   setNetStatus("Connecting...", false);
-  const url = BROKERS[brokerIdx];
-  const client = mqtt.connect(url, {
+  const client = mqtt.connect(BROKERS[brokerIdx], {
     clientId: myClientId,
     clean: true,
     connectTimeout: 4500,
-    reconnectPeriod: 0
+    reconnectPeriod: 3000
   });
 
-  let connected = false;
-  const fallbackTimer = setTimeout(() => {
-    if (!connected) {
+  let settled = false;
+  const timer = setTimeout(() => {
+    if (!settled) {
       try { client.end(true); } catch (e) {}
-      connectRelay(onConnected, brokerIdx + 1);
+      connectGlobalRelay(onReady, brokerIdx + 1);
     }
   }, 4800);
 
   client.on("connect", () => {
-    connected = true;
-    clearTimeout(fallbackTimer);
+    settled = true;
+    clearTimeout(timer);
     mqttClient = client;
     setNetStatus("Connected", true);
+    client.subscribe(PRESENCE_TOPIC);
+    sendHeartbeat();
     client.on("message", handleIncomingPacket);
-    onConnected();
+    if (onReady) onReady();
   });
 
   client.on("error", () => {
-    if (!connected) {
-      clearTimeout(fallbackTimer);
+    if (!settled) {
+      clearTimeout(timer);
       try { client.end(true); } catch (e) {}
-      connectRelay(onConnected, brokerIdx + 1);
+      connectGlobalRelay(onReady, brokerIdx + 1);
     }
   });
+}
+
+function clearMatchmakingState() {
+  searching = false;
+  if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+  document.getElementById("btnQuick").textContent = "Find Online Match";
+  if (mqttClient && mqttClient.connected) {
+    if (lobbyTopic) mqttClient.unsubscribe(lobbyTopic);
+    if (roomTopic) mqttClient.unsubscribe(roomTopic);
+  }
+  lobbyTopic = "";
+  roomTopic = "";
 }
 
 function sendRoomMsg(obj) {
@@ -684,27 +780,51 @@ function sendRoomMsg(obj) {
   mqttClient.publish(roomTopic, JSON.stringify(obj));
 }
 
+// Connect immediately on load so the live player count is always active
+connectGlobalRelay();
+
+// ==========================================
+// 7. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
+// ==========================================
+function getBotLabel() {
+  const lvl = document.getElementById("botLevelSelect").value;
+  if (lvl === "1") return "Casual Bot";
+  if (lvl === "2") return "Club Bot";
+  if (lvl === "3") return "Master Bot";
+  return "Stockfish GM";
+}
+
 function startLocalBot() {
-  cleanupNet();
+  clearMatchmakingState();
   mode = "bot";
   const t = parseInt(document.getElementById("timeSelect").value, 10);
-  initMatch(selectedGame, t, "Minimax Bot", 1);
+  initMatch(selectedGame, t, getBotLabel(), 1);
+}
+
+function startSpectateBots() {
+  clearMatchmakingState();
+  mode = "spectate";
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  const label = getBotLabel();
+  initMatch(selectedGame, t, `${label} (Black)`, 1, `${label} (White)`);
+  const mId = currentMatchId;
+  setTimeout(() => runBotTurn(1, mId), 500);
 }
 
 function findQuickMatch() {
   if (searching) {
-    cleanupNet();
+    clearMatchmakingState();
     setBanner("Matchmaking cancelled");
     return;
   }
-  cleanupNet();
+  clearMatchmakingState();
   searching = true;
   document.getElementById("btnQuick").textContent = "Cancel Search...";
   const g = selectedGame;
   const t = parseInt(document.getElementById("timeSelect").value, 10);
   setBanner("Connecting to lobby...");
 
-  connectRelay(() => {
+  connectGlobalRelay(() => {
     if (!searching) return;
     lobbyTopic = `boardhub/v1/lobby/${g}/${t}`;
     mqttClient.subscribe(lobbyTopic, () => {
@@ -725,13 +845,13 @@ function findQuickMatch() {
 }
 
 function hostFriendRoom() {
-  cleanupNet();
+  clearMatchmakingState();
   const code = String(Math.floor(1000 + Math.random() * 9000));
   const g = selectedGame;
   const t = parseInt(document.getElementById("timeSelect").value, 10);
   setBanner("Creating room...");
 
-  connectRelay(() => {
+  connectGlobalRelay(() => {
     mode = "host";
     roomTopic = `boardhub/v1/room/${code}`;
     mqttClient.subscribe(roomTopic, () => {
@@ -747,10 +867,10 @@ function joinFriendRoom() {
     setBanner("Enter a 4-digit room code first");
     return;
   }
-  cleanupNet();
+  clearMatchmakingState();
   setBanner(`Joining room ${code}...`);
 
-  connectRelay(() => {
+  connectGlobalRelay(() => {
     mode = "guest";
     roomTopic = `boardhub/v1/room/${code}`;
     mqttClient.subscribe(roomTopic, () => {
@@ -766,8 +886,25 @@ function handleIncomingPacket(topic, payloadBuf) {
   } catch (e) {
     return;
   }
-  if (!msg || msg.sender === myClientId) return;
+  if (!msg) return;
 
+  // Presence Heartbeat
+  if (topic === PRESENCE_TOPIC) {
+    if (msg.type === "hb" && msg.id) {
+      const isNew = !onlinePeers.has(msg.id);
+      onlinePeers.set(msg.id, Date.now());
+      updateOnlineCounterUI();
+      if (isNew && msg.id !== myClientId && Date.now() - lastPresenceReply > 2000) {
+        lastPresenceReply = Date.now();
+        sendHeartbeat();
+      }
+    }
+    return;
+  }
+
+  if (msg.sender === myClientId) return;
+
+  // Lobby Matchmaking
   if (topic === lobbyTopic && searching) {
     const g = selectedGame;
     const t = parseInt(document.getElementById("timeSelect").value, 10);
@@ -807,6 +944,7 @@ function handleIncomingPacket(topic, payloadBuf) {
     return;
   }
 
+  // Room Gameplay
   if (topic === roomTopic) {
     if (mode === "host") {
       if (msg.type === "hello") {
@@ -860,6 +998,7 @@ function syncToPeer() {
 }
 
 function applySync(p) {
+  currentMatchId++;
   const prevLen = moveLog.length;
   gameType = p.gameType;
   selectedGame = p.gameType;
@@ -871,6 +1010,7 @@ function applySync(p) {
   winner = p.winner;
   endReason = p.endReason;
   opponentName = p.hostName;
+  bottomTitle = `${guestId} (You)`;
   mySide = p.guestSide;
   if (gameType === "chess") chess.load(p.fen);
   chkBoard = p.chkBoard;
@@ -880,6 +1020,7 @@ function applySync(p) {
   lastMove = p.lastMove;
   moveLog = p.moveLog;
 
+  document.getElementById("btnSpectate").classList.remove("spectate-active");
   document.getElementById("btnDraw").disabled = false;
   document.getElementById("btnResign").disabled = false;
   document.getElementById("btnRematch").disabled = false;
@@ -891,10 +1032,10 @@ function applySync(p) {
 }
 
 // ==========================================
-// 6. MOVE EXECUTION & RULES (CHESS / CHK / C4)
+// 8. MOVE EXECUTION & RULES (CHESS / CHK / C4)
 // ==========================================
 function requestMove(mv) {
-  if (winner !== 0 || getCurrentTurn() !== mySide) return;
+  if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
   if (mode === "guest") {
     sendRoomMsg({ type: "move", move: mv });
   } else {
@@ -902,7 +1043,7 @@ function requestMove(mv) {
   }
 }
 
-function executeMove(mv, side, allowBotReply) {
+function executeMove(mv, side, triggerNextBot) {
   if (winner !== 0 || getCurrentTurn() !== side) return false;
 
   if (gameType === "chess") {
@@ -950,55 +1091,108 @@ function executeMove(mv, side, allowBotReply) {
   renderAll();
   syncToPeer();
 
-  if (mode === "bot" && allowBotReply && winner === 0 && getCurrentTurn() === 2) {
-    setTimeout(runBotTurn, 280);
+  if (winner === 0) {
+    const nextSide = getCurrentTurn();
+    const mId = currentMatchId;
+    if (mode === "bot" && triggerNextBot && nextSide === 2) {
+      setTimeout(() => runBotTurn(2, mId), 300);
+    } else if (mode === "spectate") {
+      setTimeout(() => runBotTurn(nextSide, mId), 600);
+    }
   }
   return true;
 }
 
 // ==========================================
-// 7. SMART BOT AI (MINIMAX)
+// 9. STOCKFISH & MINIMAX BOT ENGINE
 // ==========================================
-function runBotTurn() {
-  if (winner !== 0) return;
+function runBotTurn(botSide, reqMatchId) {
+  if (reqMatchId !== currentMatchId || winner !== 0 || getCurrentTurn() !== botSide) return;
+  const lvl = parseInt(document.getElementById("botLevelSelect").value, 10);
+
   if (gameType === "chess") {
     const moves = chess.moves({ verbose: true });
     if (!moves.length) return;
-    let bestScore = Infinity;
-    let bestMoves = [];
-    for (const m of moves) {
-      chess.move(m);
-      const score = minimaxChess(1, -Infinity, Infinity, true);
-      chess.undo();
-      if (score < bestScore) { bestScore = score; bestMoves = [m]; }
-      else if (score === bestScore) bestMoves.push(m);
+
+    // Add opening variety in Spectate mode so bot matches don't repeat identically
+    if (mode === "spectate" && moveLog.length < 2) {
+      const openings = moves.filter(m => ["e4","d4","c4","Nf3","e5","c5","e6","d5","Nf6"].includes(m.san));
+      const pool = openings.length ? openings : moves;
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      executeMove({ from: pick.from, to: pick.to, promotion: "q" }, botSide, false);
+      return;
     }
-    const pick = bestMoves[Math.floor(Math.random() * bestMoves.length)];
-    executeMove({ from: pick.from, to: pick.to, promotion: pick.promotion || "q" }, 2, false);
+
+    if (sfWorker && sfReady) {
+      const skillMap = { 1: 1, 2: 7, 3: 14, 4: 20 };
+      const depthMap = { 1: 3, 2: 7, 3: 11, 4: 15 };
+      sfCallback = (uci) => {
+        if (reqMatchId !== currentMatchId || winner !== 0) return;
+        executeMove({
+          from: uci.slice(0, 2),
+          to: uci.slice(2, 4),
+          promotion: uci[4] || "q"
+        }, botSide, false);
+      };
+      sfWorker.postMessage(`setoption name Skill Level value ${skillMap[lvl]}`);
+      sfWorker.postMessage(`position fen ${chess.fen()}`);
+      sfWorker.postMessage(`go depth ${depthMap[lvl]}`);
+    } else {
+      // Built-in Piece-Square + Alpha-Beta Fallback
+      const depth = lvl >= 3 ? 2 : 1;
+      const isMax = (botSide === 1);
+      let bestScore = isMax ? -Infinity : Infinity;
+      let bestMoves = [];
+      for (const m of moves) {
+        chess.move(m);
+        const score = minimaxChess(depth - 1, -Infinity, Infinity, !isMax);
+        chess.undo();
+        if ((isMax && score > bestScore) || (!isMax && score < bestScore)) {
+          bestScore = score;
+          bestMoves = [m];
+        } else if (score === bestScore) {
+          bestMoves.push(m);
+        }
+      }
+      const pick = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+      executeMove({ from: pick.from, to: pick.to, promotion: pick.promotion || "q" }, botSide, false);
+    }
   } else if (gameType === "checkers") {
-    const moves = getCheckersMoves(chkBoard, 2);
+    const moves = getCheckersMoves(chkBoard, botSide);
     if (!moves.length) return;
     const pick = moves[Math.floor(Math.random() * moves.length)];
-    executeMove(pick, 2, false);
+    executeMove(pick, botSide, false);
   } else if (gameType === "c4") {
     const valid = [0,1,2,3,4,5,6].filter(c => c4Board[0][c] === 0);
-    for (const p of [2, 1]) {
+    if (!valid.length) return;
+    if (mode === "spectate" && moveLog.length === 0) {
+      executeMove({ col: valid[Math.floor(Math.random() * valid.length)] }, botSide, false);
+      return;
+    }
+    const opp = 3 - botSide;
+    for (const p of [botSide, opp]) {
       for (const c of valid) {
         const copy = c4Board.map(r => [...r]);
         const r = dropC4(copy, c, p);
         if (checkC4Win(copy, r, c, p)) {
-          executeMove({ col: c }, 2, false);
+          executeMove({ col: c }, botSide, false);
           return;
         }
       }
     }
     valid.sort((a, b) => Math.abs(3 - a) - Math.abs(3 - b));
-    executeMove({ col: valid[0] }, 2, false);
+    executeMove({ col: valid[0] }, botSide, false);
   }
 }
 
+const PST_PAWN = [
+  [0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],
+  [5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],
+  [5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]
+];
+
 function evalChessBoard() {
-  if (chess.in_checkmate()) return chess.turn() === "w" ? -9999 : 9999;
+  if (chess.in_checkmate()) return chess.turn() === "w" ? -99999 : 99999;
   if (chess.in_draw()) return 0;
   let total = 0;
   const b = chess.board();
@@ -1006,8 +1200,9 @@ function evalChessBoard() {
     for (let c = 0; c < 8; c++) {
       const p = b[r][c];
       if (!p) continue;
-      const centerBonus = (r >= 2 && r <= 5 && c >= 2 && c <= 5) ? 0.15 : 0;
-      const v = PIECE_VAL[p.type] + centerBonus;
+      let v = PIECE_VAL[p.type];
+      if (p.type === "p") v += p.color === "w" ? PST_PAWN[r][c] : PST_PAWN[7 - r][c];
+      else if (r >= 2 && r <= 5 && c >= 2 && c <= 5) v += 15;
       total += p.color === "w" ? v : -v;
     }
   }
@@ -1096,10 +1291,10 @@ function checkC4Win(b, r, c, side) {
 }
 
 // ==========================================
-// 8. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
+// 10. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
 // ==========================================
 function resignGame() {
-  if (winner !== 0) return;
+  if (winner !== 0 || mode === "spectate") return;
   if (mode === "guest") {
     sendRoomMsg({ type: "resign" });
   } else {
@@ -1109,13 +1304,15 @@ function resignGame() {
 }
 
 function offerDraw() {
-  if (winner !== 0 || mode === "bot") return;
+  if (winner !== 0 || mode === "bot" || mode === "spectate") return;
   sendRoomMsg({ type: "draw_offer" });
   setBanner("Draw offer sent...");
 }
 
 function requestRematch() {
-  if (mode === "bot") {
+  if (mode === "spectate") {
+    startSpectateBots();
+  } else if (mode === "bot") {
     startLocalBot();
   } else if (mode === "host") {
     initMatch(gameType, baseTime, opponentName, mySide === 1 ? 2 : 1);
@@ -1126,7 +1323,7 @@ function requestRematch() {
 }
 
 // ==========================================
-// 9. RENDER BOARD, CAPTURED PIECES & UI
+// 11. RENDER BOARD, CAPTURED PIECES & UI
 // ==========================================
 function setBanner(msg) {
   document.getElementById("statusBanner").textContent = msg;
@@ -1165,10 +1362,10 @@ function updateCapturedUI() {
     const mb = Math.max(0, start[t] - curB[t]);
     wLostHTML += getPieceSVG("w", t, "cap-icon").repeat(mw);
     bLostHTML += getPieceSVG("b", t, "cap-icon").repeat(mb);
-    wMat += curW[t] * PIECE_VAL[t];
-    bMat += curB[t] * PIECE_VAL[t];
+    wMat += curW[t] * (PIECE_VAL[t] / 100);
+    bMat += curB[t] * (PIECE_VAL[t] / 100);
   }
-  const diff = wMat - bMat;
+  const diff = Math.round(wMat - bMat);
   const wStr = bLostHTML + (diff > 0 ? `<span style="margin-left:4px">+${diff}</span>` : "");
   const bStr = wLostHTML + (diff < 0 ? `<span style="margin-left:4px">+${Math.abs(diff)}</span>` : "");
   botCap.innerHTML = mySide === 1 ? wStr : bStr;
@@ -1177,21 +1374,30 @@ function updateCapturedUI() {
 
 function renderAll() {
   const oppSide = 3 - mySide;
-  document.getElementById("botName").textContent = `${guestId} (You)`;
+  document.getElementById("botName").textContent = bottomTitle;
   document.getElementById("topName").textContent = opponentName;
-  document.getElementById("botAvatar").textContent = mySide === 1 ? "P1" : "P2";
-  document.getElementById("topAvatar").textContent = oppSide === 1 ? "P1" : "P2";
+  document.getElementById("botAvatar").textContent = mode === "spectate" ? "AI" : (mySide === 1 ? "P1" : "P2");
+  document.getElementById("topAvatar").textContent = mode === "spectate" ? "AI" : (oppSide === 1 ? "P1" : "P2");
 
   updateClockUI();
   updateCapturedUI();
 
-  if (winner === 3) setBanner(`Draw (${endReason})`);
-  else if (winner === mySide) setBanner(`You Won ${endReason}!`);
-  else if (winner === oppSide) setBanner(`${opponentName} Won ${endReason}`);
-  else {
-    const myTurn = getCurrentTurn() === mySide;
+  if (winner === 3) {
+    setBanner(`Draw (${endReason})`);
+  } else if (winner !== 0) {
+    if (mode === "spectate") {
+      setBanner(`${winner === 1 ? bottomTitle : opponentName} Won ${endReason}`);
+    } else {
+      setBanner(winner === mySide ? `You Won ${endReason}!` : `${opponentName} Won ${endReason}`);
+    }
+  } else {
+    const turn = getCurrentTurn();
     const chk = (gameType === "chess" && chess.in_check()) ? " — CHECK!" : "";
-    setBanner((myTurn ? "Your Turn" : `${opponentName}'s Turn`) + chk);
+    if (mode === "spectate") {
+      setBanner(`Spectating: ${turn === 1 ? "White / P1" : "Black / P2"} thinking${chk}`);
+    } else {
+      setBanner((turn === mySide ? "Your Turn" : `${opponentName}'s Turn`) + chk);
+    }
   }
 
   const box = document.getElementById("movesBox");
@@ -1312,7 +1518,7 @@ function renderBoard() {
 }
 
 function onChessSquareClick(sqName, piece) {
-  if (winner !== 0 || getCurrentTurn() !== mySide) return;
+  if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
   const myColor = mySide === 1 ? "w" : "b";
 
   const target = legalTargets.find(m => m.to === sqName);
@@ -1353,7 +1559,7 @@ function showPromotionPicker(from, to, color) {
 }
 
 function onCheckersSquareClick(r, c, v) {
-  if (winner !== 0 || getCurrentTurn() !== mySide) return;
+  if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
   const target = legalTargets.find(m => m.r2 === r && m.c2 === c);
   if (target) {
     requestMove(target);
