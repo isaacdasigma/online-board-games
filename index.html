@@ -3,314 +3,1230 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pico-Refereed Board Game Hub</title>
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <title>BoardHub — Online Chess, Checkers & Connect 4</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; text-align: center; }
-    .card { max-width: 520px; margin: 0 auto 16px; background: #1e293b; padding: 18px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-    .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
-    button, select, input { padding: 9px 14px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; }
-    button { background: #3b82f6; color: white; cursor: pointer; }
-    button:hover { background: #2563eb; }
-    button:disabled { background: #475569; cursor: not-allowed; }
-    .green { background: #10b981; } .green:hover { background: #059669; }
-    .purple { background: #8b5cf6; } .purple:hover { background: #7c3aed; }
-    input { background: #0f172a; color: white; border: 1px solid #334155; width: 120px; text-align: center; }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: #334155; margin: 4px; }
-    .ok { background: #065f46; color: #6ee7b7; }
-    #board { display: grid; margin: 16px auto; max-width: 400px; border: 4px solid #334155; border-radius: 6px; overflow: hidden; }
-    .cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer; user-select: none; }
-    .light { background: #cbd5e1; color: #0f172a; }
-    .dark { background: #64748b; color: #0f172a; }
-    .sel { outline: 3px solid #facc15; z-index: 2; }
-    .c4-cell { background: #1d4ed8; padding: 5px; }
-    .hole { width: 100%; height: 100%; border-radius: 50%; background: #0f172a; }
-    .p1 { background: #ef4444 !important; }
-    .p2 { background: #facc15 !important; }
-    .disc { width: 76%; height: 76%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    .w-piece { color: #ffffff; text-shadow: 0 1px 3px #000; }
-    .b-piece { color: #0f172a; text-shadow: 0 1px 1px rgba(255,255,255,0.5); }
+    :root {
+      --bg: #302e2b;
+      --panel: #262421;
+      --panel-light: #383531;
+      --text: #f3f3f2;
+      --muted: #a3a19e;
+      --accent: #81b64c;
+      --accent-hover: #95cc5c;
+      --sq-light: #eeeed2;
+      --sq-dark: #769656;
+      --sq-last: rgba(246, 246, 105, 0.55);
+      --sq-sel: rgba(246, 246, 105, 0.75);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      min-height: 100vh;
+    }
+    .app {
+      display: flex;
+      gap: 20px;
+      max-width: 960px;
+      width: 100%;
+      align-items: flex-start;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .board-col {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 500px;
+      gap: 8px;
+    }
+    .player-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--panel);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    .player-info { display: flex; align-items: center; gap: 10px; }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 4px;
+      background: var(--panel-light); display: flex; align-items: center;
+      justify-content: center; font-weight: 700; font-size: 14px;
+    }
+    .p-name { font-weight: 700; font-size: 14px; }
+    .captured { font-size: 13px; color: var(--muted); min-height: 16px; letter-spacing: 1px; }
+    .clock {
+      background: #1e1c1a;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 20px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 4px;
+      min-width: 82px;
+      text-align: right;
+    }
+    .clock.active { background: #ffffff; color: #1e1c1a; }
+    .clock.low { background: #b91c1c; color: #ffffff; }
+
+    .board-wrap { position: relative; width: 100%; aspect-ratio: 1; }
+    #board {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+      user-select: none;
+    }
+    .sq {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .sq.light { background: var(--sq-light); }
+    .sq.dark { background: var(--sq-dark); }
+    .sq.last::before, .sq.sel::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+    }
+    .sq.last::before { background: var(--sq-last); }
+    .sq.sel::before { background: var(--sq-sel); }
+    .sq.check { background: radial-gradient(circle, #ef4444 25%, #b91c1c 85%) !important; }
+
+    .dot {
+      width: 30%; height: 30%; border-radius: 50%;
+      background: rgba(0, 0, 0, 0.18); pointer-events: none; z-index: 2;
+    }
+    .ring {
+      position: absolute; inset: 8%; border-radius: 50%;
+      border: 5px solid rgba(0, 0, 0, 0.18); pointer-events: none; z-index: 2;
+    }
+    .coord {
+      position: absolute; font-size: 10px; font-weight: 700; pointer-events: none; opacity: 0.85;
+    }
+    .coord.rank { top: 2px; left: 3px; }
+    .coord.file { bottom: 2px; right: 3px; }
+    .light .coord { color: var(--sq-dark); }
+    .dark .coord { color: var(--sq-light); }
+
+    .piece {
+      font-size: clamp(32px, 7.5vw, 48px);
+      line-height: 1;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .piece.w {
+      color: #ffffff;
+      -webkit-text-stroke: 1.5px #1e1c1a;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.35));
+    }
+    .piece.b {
+      color: #1e1c1a;
+      -webkit-text-stroke: 0.6px #000000;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25));
+    }
+    .chk-disc {
+      width: 76%; height: 76%; border-radius: 50%; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 16px;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.45), inset 0 2px 3px rgba(255,255,255,0.3);
+    }
+    .chk-disc.p1 { background: #dc2626; color: #fef2f2; border: 3px solid #991b1b; }
+    .chk-disc.p2 { background: #1f2937; color: #facc15; border: 3px solid #111827; }
+
+    .c4-sq { background: #1d4ed8; padding: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .c4-hole { width: 100%; height: 100%; border-radius: 50%; background: #1e1c1a; box-shadow: inset 0 3px 6px rgba(0,0,0,0.6); }
+    .c4-hole.p1 { background: #ef4444; }
+    .c4-hole.p2 { background: #facc15; }
+
+    #promoModal {
+      display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.65);
+      align-items: center; justify-content: center; z-index: 10; border-radius: 4px;
+    }
+    .promo-box { background: var(--panel); padding: 12px; border-radius: 8px; display: flex; gap: 10px; }
+    .promo-btn {
+      font-size: 38px; padding: 8px 14px; background: var(--panel-light);
+      border: none; border-radius: 6px; cursor: pointer; color: white;
+    }
+    .promo-btn:hover { background: var(--accent); }
+
+    .sidebar {
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 16px;
+      width: 100%;
+      max-width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+    }
+    .brand { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .brand h2 { margin: 0; font-size: 20px; }
+    .tag-row { display: flex; gap: 6px; align-items: center; }
+    .guest-tag { font-size: 11px; background: var(--panel-light); padding: 4px 8px; border-radius: 4px; color: var(--muted); }
+    .guest-tag.online { background: #14532d; color: #86efac; }
+    .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    select, input, button {
+      font-family: inherit; font-size: 14px; font-weight: 700;
+      border: none; border-radius: 6px; padding: 10px 12px;
+    }
+    select, input { background: var(--panel-light); color: var(--text); }
+    input { text-align: center; width: 100%; }
+    button { background: var(--panel-light); color: var(--text); cursor: pointer; transition: 0.15s; }
+    button:hover { filter: brightness(1.15); }
+    button.primary {
+      background: var(--accent); color: #ffffff; font-size: 16px; padding: 13px;
+      box-shadow: 0 3px 0 #537a2e;
+    }
+    button.primary:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status-banner {
+      background: var(--panel-light);
+      padding: 10px;
+      border-radius: 6px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: #facc15;
+    }
+    .moves-box {
+      background: #1e1c1a;
+      border-radius: 6px;
+      height: 170px;
+      overflow-y: auto;
+      padding: 8px;
+      font-size: 13px;
+      font-family: ui-monospace, monospace;
+    }
+    .move-row { display: grid; grid-template-columns: 36px 1fr 1fr; padding: 3px 4px; border-radius: 3px; }
+    .move-row:nth-child(even) { background: rgba(255,255,255,0.04); }
+    .move-num { color: var(--muted); }
+    .action-row { display: flex; gap: 8px; }
+    .action-row button { flex: 1; font-size: 13px; padding: 8px; }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <h2 style="margin:0 0 8px">Board Game Hub</h2>
-    <div>
-      <span id="guestBadge" class="badge">Guest: ...</span>
-      <span id="picoBadge" class="badge">Pico Referee: Disconnected</span>
-      <span id="netBadge" class="badge">Multiplayer: Offline</span>
+<div class="app">
+  <!-- LEFT: BOARD & PLAYER BARS -->
+  <div class="board-col">
+    <div class="player-bar">
+      <div class="player-info">
+        <div class="avatar" id="topAvatar">P2</div>
+        <div>
+          <div class="p-name" id="topName">Opponent</div>
+          <div class="captured" id="topCap"></div>
+        </div>
+      </div>
+      <div class="clock" id="topClock">03:00</div>
     </div>
 
-    <div class="row" style="margin-top:14px">
-      <button class="purple" onclick="connectPico()">1. Connect Pico Referee (USB)</button>
+    <div class="board-wrap">
+      <div id="board"></div>
+      <div id="promoModal">
+        <div class="promo-box" id="promoChoices"></div>
+      </div>
     </div>
 
-    <div class="row">
+    <div class="player-bar">
+      <div class="player-info">
+        <div class="avatar" id="botAvatar">P1</div>
+        <div>
+          <div class="p-name" id="botName">You</div>
+          <div class="captured" id="botCap"></div>
+        </div>
+      </div>
+      <div class="clock active" id="botClock">03:00</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: CHESS.COM STYLE SIDEBAR -->
+  <div class="sidebar">
+    <div class="brand">
+      <h2>BoardHub</h2>
+      <div class="tag-row">
+        <span class="guest-tag" id="netBadge">Offline</span>
+        <span class="guest-tag" id="guestBadge">guest_0000</span>
+      </div>
+    </div>
+
+    <div class="controls-grid">
       <select id="gameSelect">
         <option value="chess">Chess</option>
         <option value="checkers">Checkers</option>
         <option value="c4">Connect 4</option>
       </select>
-      <button id="btnBot" disabled onclick="startNewGame(true)">Play vs Pico Bot</button>
-      <button id="btnHost" class="green" disabled onclick="hostOnlineGame()">Host 2P Room</button>
+      <select id="timeSelect">
+        <option value="180">3 min (Blitz)</option>
+        <option value="60">1 min (Bullet)</option>
+        <option value="600">10 min (Rapid)</option>
+        <option value="0">Untimed</option>
+      </select>
     </div>
 
-    <div class="row">
-      <input id="roomInput" placeholder="4-digit code" maxlength="4" />
-      <button onclick="joinOnlineGame()">Join Friend's Room</button>
+    <button class="primary" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
+
+    <div class="controls-grid">
+      <button onclick="startLocalBot()">Play vs Bot</button>
+      <button onclick="hostFriendRoom()">Create Friend Room</button>
     </div>
 
-    <div id="roomDisplay" style="color:#38bdf8; font-weight:bold; margin-top:6px;"></div>
-  </div>
+    <div class="controls-grid">
+      <input id="codeInput" placeholder="4-digit code" maxlength="4" />
+      <button onclick="joinFriendRoom()">Join Code</button>
+    </div>
 
-  <div class="card">
-    <h3 id="statusText" style="margin:0; color:#facc15;">Connect your Pico 2 W or join a friend's room</h3>
-    <div id="board"></div>
+    <div class="status-banner" id="statusBanner">Choose a mode to start playing</div>
+
+    <div class="moves-box" id="movesBox"></div>
+
+    <div class="action-row">
+      <button id="btnDraw" onclick="offerDraw()" disabled>Draw</button>
+      <button id="btnResign" onclick="resignGame()" disabled>Resign</button>
+      <button id="btnRematch" onclick="requestRematch()" disabled>Rematch</button>
+    </div>
   </div>
+</div>
 
 <script>
-// 1. PERSISTENT GUEST IDENTITY
-let guestId = localStorage.getItem("hub_guest_id");
+// ==========================================
+// 1. PERSISTENT GUEST ID & SOUND ENGINE
+// ==========================================
+let guestId = localStorage.getItem("bh_guest_id");
 if (!guestId) {
   guestId = "guest_" + Math.floor(1000 + Math.random() * 9000);
-  localStorage.setItem("hub_guest_id", guestId);
+  localStorage.setItem("bh_guest_id", guestId);
 }
-document.getElementById("guestBadge").textContent = "ID: " + guestId;
+document.getElementById("guestBadge").textContent = guestId;
+const myClientId = guestId + "_" + Math.random().toString(36).slice(2, 7);
 
-// 2. APP STATE
-let role = "solo"; // "solo" | "host" | "guest"
-let myPlayer = 1;
-let gameState = null;
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+
+  if (type === "move") {
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.exponentialRampToValueAtTime(65, now + 0.08);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    osc.start(now); osc.stop(now + 0.08);
+  } else if (type === "capture") {
+    osc.type = "square";
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(55, now + 0.11);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
+    osc.start(now); osc.stop(now + 0.11);
+  } else if (type === "check") {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.setValueAtTime(390, now + 0.09);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    osc.start(now); osc.stop(now + 0.2);
+  } else if (type === "end") {
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(330, now);
+    osc.frequency.setValueAtTime(440, now + 0.12);
+    osc.frequency.setValueAtTime(554, now + 0.24);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+    osc.start(now); osc.stop(now + 0.45);
+  }
+}
+
+// ==========================================
+// 2. GAME STATE & VARIABLES
+// ==========================================
+let mode = "bot"; // "bot" | "host" | "guest"
+let mySide = 1;   // 1 = White/Red, 2 = Black/Yellow
+let gameType = "chess";
+let baseTime = 180;
+let clocks = { 1: 180, 2: 180 };
+let clockTimer = null;
+let winner = 0;   // 0 = active, 1 = P1, 2 = P2, 3 = draw
+let endReason = "";
+let opponentName = "Minimax Bot";
 let selected = null;
-let serialWriter = null;
-let peer = null;
-let conn = null;
+let legalTargets = [];
+let lastMove = null;
+let moveLog = [];
 
-const CHESS_ICONS = {
-  P:"♙", N:"♘", B:"♗", R:"♖", Q:"♕", K:"♔",
-  p:"♟", n:"♞", b:"♝", r:"♜", q:"♛", k:"♚"
+let chess = new Chess();
+let chkBoard = [];
+let chkTurn = 1;
+let c4Board = [];
+let c4Turn = 1;
+
+// MQTT Over HTTPS Port 443 Networking
+const BROKERS = [
+  "wss://mqtt.eclipseprojects.io:443/mqtt",
+  "wss://broker.emqx.io:8084/mqtt",
+  "wss://broker.hivemq.com:8884/mqtt"
+];
+let mqttClient = null;
+let lobbyTopic = "";
+let roomTopic = "";
+let searching = false;
+let seekTimer = null;
+
+const CHESS_GLYPHS = {
+  wP:"♙", wN:"♘", wB:"♗", wR:"♖", wQ:"♕", wK:"♔",
+  bP:"♟", bN:"♞", bB:"♝", bR:"♜", bQ:"♛", bK:"♚"
 };
+const PIECE_VAL = { p:1, n:3, b:3, r:5, q:9, k:0 };
 
-// 3. WEB SERIAL CONNECTION TO PICO 2 W
-async function connectPico() {
-  if (!("serial" in navigator)) {
-    alert("Use Google Chrome or Edge to connect to the Pico over USB.");
+// ==========================================
+// 3. INITIALIZE & CLOCK MANAGEMENT
+// ==========================================
+function initMatch(gType, tSec, oppName, side) {
+  gameType = gType;
+  baseTime = tSec;
+  clocks = { 1: tSec, 2: tSec };
+  winner = 0;
+  endReason = "";
+  opponentName = oppName;
+  mySide = side;
+  selected = null;
+  legalTargets = [];
+  lastMove = null;
+  moveLog = [];
+
+  if (gameType === "chess") {
+    chess = new Chess();
+  } else if (gameType === "checkers") {
+    chkTurn = 1;
+    chkBoard = Array.from({ length: 8 }, (_, r) =>
+      Array.from({ length: 8 }, (_, c) => {
+        if ((r + c) % 2 === 1) {
+          if (r < 3) return 2;
+          if (r > 4) return 1;
+        }
+        return 0;
+      })
+    );
+  } else {
+    c4Turn = 1;
+    c4Board = Array.from({ length: 6 }, () => Array(7).fill(0));
+  }
+
+  document.getElementById("btnDraw").disabled = (mode === "bot");
+  document.getElementById("btnResign").disabled = false;
+  document.getElementById("btnRematch").disabled = false;
+
+  startClockLoop();
+  renderAll();
+}
+
+function getCurrentTurn() {
+  if (gameType === "chess") return chess.turn() === "w" ? 1 : 2;
+  if (gameType === "checkers") return chkTurn;
+  return c4Turn;
+}
+
+function startClockLoop() {
+  if (clockTimer) clearInterval(clockTimer);
+  if (baseTime === 0) return;
+  clockTimer = setInterval(() => {
+    if (winner !== 0) return;
+    const t = getCurrentTurn();
+    clocks[t] = Math.max(0, clocks[t] - 1);
+    updateClockUI();
+    if (clocks[t] === 0 && mode !== "guest") {
+      finishMatch(3 - t, "on time");
+      syncToPeer();
+    }
+  }, 1000);
+}
+
+function formatClock(sec) {
+  if (baseTime === 0) return "--:--";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function finishMatch(winSide, reason) {
+  winner = winSide;
+  endReason = reason;
+  playSound("end");
+  renderAll();
+}
+
+// ==========================================
+// 4. SCHOOL-WIFI FRIENDLY WSS NETWORKING
+// ==========================================
+function setNetStatus(text, isOnline) {
+  const el = document.getElementById("netBadge");
+  el.textContent = text;
+  el.className = "guest-tag" + (isOnline ? " online" : "");
+}
+
+function cleanupNet() {
+  searching = false;
+  if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+  document.getElementById("btnQuick").textContent = "Find Online Match";
+  lobbyTopic = "";
+  roomTopic = "";
+  if (mqttClient) {
+    try { mqttClient.end(true); } catch (e) {}
+    mqttClient = null;
+  }
+  setNetStatus("Offline", false);
+}
+
+function connectRelay(onConnected, brokerIdx = 0) {
+  if (brokerIdx >= BROKERS.length) {
+    setNetStatus("Blocked", false);
+    setBanner("Network blocked all relays — try Play vs Bot");
+    cleanupNet();
     return;
   }
-  try {
-    const port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
-    serialWriter = port.writable.getWriter();
+  setNetStatus("Connecting...", false);
+  const url = BROKERS[brokerIdx];
+  const client = mqtt.connect(url, {
+    clientId: myClientId,
+    clean: true,
+    connectTimeout: 4500,
+    reconnectPeriod: 0
+  });
 
-    const badge = document.getElementById("picoBadge");
-    badge.textContent = "Pico Referee: Connected";
-    badge.classList.add("ok");
-    document.getElementById("btnBot").disabled = false;
-    document.getElementById("btnHost").disabled = false;
+  let connected = false;
+  const fallbackTimer = setTimeout(() => {
+    if (!connected) {
+      try { client.end(true); } catch (e) {}
+      connectRelay(onConnected, brokerIdx + 1);
+    }
+  }, 4800);
 
-    readSerialLoop(port);
-    sendToPico({ cmd: "ping" });
-  } catch (err) {
-    console.error(err);
-  }
+  client.on("connect", () => {
+    connected = true;
+    clearTimeout(fallbackTimer);
+    mqttClient = client;
+    setNetStatus("Online (443)", true);
+    client.on("message", handleIncomingPacket);
+    onConnected();
+  });
+
+  client.on("error", () => {
+    if (!connected) {
+      clearTimeout(fallbackTimer);
+      try { client.end(true); } catch (e) {}
+      connectRelay(onConnected, brokerIdx + 1);
+    }
+  });
 }
 
-async function readSerialLoop(port) {
-  const decoder = new TextDecoderStream();
-  port.readable.pipeTo(decoder.writable);
-  const reader = decoder.readable.getReader();
-  let buffer = "";
+function sendRoomMsg(obj) {
+  if (!mqttClient || !mqttClient.connected || !roomTopic) return;
+  obj.sender = myClientId;
+  mqttClient.publish(roomTopic, JSON.stringify(obj));
+}
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += value;
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
-    for (const line of lines) {
-      const clean = line.trim();
-      if (clean.startsWith("{")) {
-        try {
-          const msg = JSON.parse(clean);
-          if (msg.state) {
-            gameState = msg.state;
-            renderBoard();
-            if (conn && conn.open) {
-              conn.send({ type: "state", state: gameState });
-            }
-          }
-        } catch (e) {}
+function startLocalBot() {
+  cleanupNet();
+  mode = "bot";
+  const g = document.getElementById("gameSelect").value;
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  initMatch(g, t, "Minimax Bot", 1);
+}
+
+function findQuickMatch() {
+  if (searching) {
+    cleanupNet();
+    setBanner("Matchmaking cancelled");
+    return;
+  }
+  cleanupNet();
+  searching = true;
+  document.getElementById("btnQuick").textContent = "Cancel Search...";
+  const g = document.getElementById("gameSelect").value;
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  setBanner("Connecting to matchmaking relay...");
+
+  connectRelay(() => {
+    if (!searching) return;
+    lobbyTopic = `boardhub/v1/lobby/${g}/${t}`;
+    mqttClient.subscribe(lobbyTopic, () => {
+      setBanner("Searching for an opponent...");
+      const broadcastSeek = () => {
+        if (searching && mqttClient && mqttClient.connected) {
+          mqttClient.publish(lobbyTopic, JSON.stringify({
+            type: "seek",
+            sender: myClientId,
+            guestId
+          }));
+        }
+      };
+      broadcastSeek();
+      seekTimer = setInterval(broadcastSeek, 2000);
+    });
+  });
+}
+
+function hostFriendRoom() {
+  cleanupNet();
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  const g = document.getElementById("gameSelect").value;
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  setBanner("Creating room...");
+
+  connectRelay(() => {
+    mode = "host";
+    roomTopic = `boardhub/v1/room/${code}`;
+    mqttClient.subscribe(roomTopic, () => {
+      initMatch(g, t, "Waiting...", 1);
+      setBanner(`Room Code: ${code} — Share with friend!`);
+    });
+  });
+}
+
+function joinFriendRoom() {
+  const code = document.getElementById("codeInput").value.trim();
+  if (code.length !== 4) {
+    setBanner("Enter a 4-digit room code first");
+    return;
+  }
+  cleanupNet();
+  setBanner(`Joining room ${code}...`);
+
+  connectRelay(() => {
+    mode = "guest";
+    roomTopic = `boardhub/v1/room/${code}`;
+    mqttClient.subscribe(roomTopic, () => {
+      sendRoomMsg({ type: "hello", guestId });
+    });
+  });
+}
+
+function handleIncomingPacket(topic, payloadBuf) {
+  let msg;
+  try {
+    msg = JSON.parse(payloadBuf.toString());
+  } catch (e) {
+    return;
+  }
+  if (!msg || msg.sender === myClientId) return;
+
+  // 1. Lobby Matchmaking Messages
+  if (topic === lobbyTopic && searching) {
+    const g = document.getElementById("gameSelect").value;
+    const t = parseInt(document.getElementById("timeSelect").value, 10);
+
+    if (msg.type === "seek" && myClientId < msg.sender) {
+      searching = false;
+      if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+      document.getElementById("btnQuick").textContent = "Find Online Match";
+      mqttClient.unsubscribe(lobbyTopic);
+
+      const roomId = `m_${myClientId}_${msg.sender}`;
+      roomTopic = `boardhub/v1/room/${roomId}`;
+      mode = "host";
+
+      mqttClient.subscribe(roomTopic, () => {
+        initMatch(g, t, msg.guestId || "Opponent", 1);
+        mqttClient.publish(lobbyTopic, JSON.stringify({
+          type: "matched",
+          sender: myClientId,
+          target: msg.sender,
+          roomId,
+          payload: buildSyncPayload()
+        }));
+      });
+    } else if (msg.type === "matched" && msg.target === myClientId) {
+      searching = false;
+      if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+      document.getElementById("btnQuick").textContent = "Find Online Match";
+      mqttClient.unsubscribe(lobbyTopic);
+
+      roomTopic = `boardhub/v1/room/${msg.roomId}`;
+      mode = "guest";
+      mqttClient.subscribe(roomTopic, () => {
+        applySync(msg.payload);
+      });
+    }
+    return;
+  }
+
+  // 2. Room Gameplay Messages
+  if (topic === roomTopic) {
+    if (mode === "host") {
+      if (msg.type === "hello") {
+        opponentName = msg.guestId || "Friend";
+        initMatch(gameType, baseTime, opponentName, 1);
+        sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
+      } else if (msg.type === "move") {
+        executeMove(msg.move, 2, true);
+      } else if (msg.type === "resign") {
+        finishMatch(1, "by resignation");
+        syncToPeer();
+      } else if (msg.type === "draw_offer") {
+        if (confirm(`${opponentName} offers a draw. Accept?`)) {
+          finishMatch(3, "by agreement");
+          syncToPeer();
+        }
+      } else if (msg.type === "draw_accept") {
+        finishMatch(3, "by agreement");
+        syncToPeer();
+      } else if (msg.type === "rematch") {
+        initMatch(gameType, baseTime, opponentName, mySide === 1 ? 2 : 1);
+        syncToPeer();
+      }
+    } else if (mode === "guest") {
+      if (msg.type === "welcome" || msg.type === "sync") {
+        applySync(msg.payload);
+      } else if (msg.type === "draw_offer") {
+        if (confirm(`${opponentName} offers a draw. Accept?`)) {
+          sendRoomMsg({ type: "draw_accept" });
+        }
       }
     }
   }
 }
 
-async function sendToPico(obj) {
-  if (!serialWriter) return;
-  const line = JSON.stringify(obj) + "\n";
-  await serialWriter.write(new TextEncoder().encode(line));
+function buildSyncPayload() {
+  return {
+    gameType, baseTime, clocks, winner, endReason,
+    hostName: guestId,
+    guestSide: mySide === 1 ? 2 : 1,
+    fen: chess.fen(),
+    chkBoard, chkTurn, c4Board, c4Turn,
+    lastMove, moveLog
+  };
 }
 
-// 4. GAME CONTROLS
-function startNewGame(vsBot) {
-  role = vsBot ? "solo" : "host";
-  myPlayer = 1;
-  selected = null;
-  sendToPico({ cmd: "new", game: document.getElementById("gameSelect").value, vs_bot: vsBot });
-}
-
-// 5. PEERJS MULTIPLAYER (NO SERVER NEEDED)
-function hostOnlineGame() {
-  startNewGame(false);
-  const code = String(Math.floor(1000 + Math.random() * 9000));
-  if (peer) peer.destroy();
-  peer = new Peer("pico-hub-" + code);
-
-  peer.on("open", () => {
-    document.getElementById("roomDisplay").textContent = "Room Code: " + code + " (Share with Player 2)";
-    document.getElementById("netBadge").textContent = "Waiting for P2...";
-  });
-
-  peer.on("connection", (c) => {
-    conn = c;
-    const netBadge = document.getElementById("netBadge");
-    netBadge.textContent = "Player 2 Connected!";
-    netBadge.classList.add("ok");
-    conn.on("open", () => {
-      if (gameState) conn.send({ type: "state", state: gameState });
-    });
-    conn.on("data", (data) => {
-      if (data.type === "move_req") {
-        sendToPico(data.payload);
-      }
-    });
-  });
-}
-
-function joinOnlineGame() {
-  const code = document.getElementById("roomInput").value.trim();
-  if (code.length !== 4) {
-    alert("Enter the 4-digit room code from Player 1.");
-    return;
+function syncToPeer() {
+  if (mode === "host") {
+    sendRoomMsg({ type: "sync", payload: buildSyncPayload() });
   }
-  role = "guest";
-  myPlayer = 2;
-  selected = null;
-  if (peer) peer.destroy();
-  peer = new Peer();
-
-  peer.on("open", () => {
-    conn = peer.connect("pico-hub-" + code);
-    conn.on("open", () => {
-      const netBadge = document.getElementById("netBadge");
-      netBadge.textContent = "Connected to Room " + code;
-      netBadge.classList.add("ok");
-      document.getElementById("roomDisplay").textContent = "You are Player 2";
-    });
-    conn.on("data", (data) => {
-      if (data.type === "state") {
-        gameState = data.state;
-        renderBoard();
-      }
-    });
-  });
 }
 
-// 6. SUBMIT MOVE
-function submitMove(payload) {
-  payload.cmd = "move";
-  payload.player = myPlayer;
-  if (role === "guest") {
-    if (conn && conn.open) conn.send({ type: "move_req", payload });
+function applySync(p) {
+  const prevLen = moveLog.length;
+  gameType = p.gameType;
+  baseTime = p.baseTime;
+  clocks = p.clocks;
+  winner = p.winner;
+  endReason = p.endReason;
+  opponentName = p.hostName;
+  mySide = p.guestSide;
+  if (gameType === "chess") chess.load(p.fen);
+  chkBoard = p.chkBoard;
+  chkTurn = p.chkTurn;
+  c4Board = p.c4Board;
+  c4Turn = p.c4Turn;
+  lastMove = p.lastMove;
+  moveLog = p.moveLog;
+
+  document.getElementById("btnDraw").disabled = false;
+  document.getElementById("btnResign").disabled = false;
+  document.getElementById("btnRematch").disabled = false;
+
+  if (moveLog.length > prevLen) playSound("move");
+  if (winner !== 0) playSound("end");
+  startClockLoop();
+  renderAll();
+}
+
+// ==========================================
+// 5. MOVE EXECUTION & RULES (CHESS / CHK / C4)
+// ==========================================
+function requestMove(mv) {
+  if (winner !== 0 || getCurrentTurn() !== mySide) return;
+  if (mode === "guest") {
+    sendRoomMsg({ type: "move", move: mv });
   } else {
-    sendToPico(payload);
+    executeMove(mv, mySide, true);
   }
 }
 
-// 7. RENDER BOARD
-function renderBoard() {
-  if (!gameState) return;
-  const st = document.getElementById("statusText");
-  const p1Name = gameState.game === "chess" ? "White (P1)" : "Red (P1)";
-  const p2Name = gameState.game === "chess" ? "Black (P2)" : "Yellow (P2)";
+function executeMove(mv, side, allowBotReply) {
+  if (winner !== 0 || getCurrentTurn() !== side) return false;
 
-  if (gameState.winner === 3) st.textContent = "Draw Game!";
-  else if (gameState.winner) st.textContent = (gameState.winner === 1 ? p1Name : p2Name) + " Wins!";
-  else {
-    const turnStr = gameState.turn === 1 ? p1Name : p2Name;
-    st.textContent = (gameState.turn === myPlayer ? "Your Turn: " : "Waiting for: ") + turnStr;
+  if (gameType === "chess") {
+    const res = chess.move(mv);
+    if (!res) return false;
+    lastMove = [res.from, res.to];
+    moveLog.push(res.san);
+    playSound(chess.in_check() ? "check" : (res.captured ? "capture" : "move"));
+
+    if (chess.game_over()) {
+      if (chess.in_checkmate()) finishMatch(side, "by checkmate");
+      else finishMatch(3, "by draw");
+    }
+  } else if (gameType === "checkers") {
+    const legal = getCheckersMoves(chkBoard, side);
+    const match = legal.find(m => m.r1 === mv.r1 && m.c1 === mv.c1 && m.r2 === mv.r2 && m.c2 === mv.c2);
+    if (!match) return false;
+    applyCheckersMove(chkBoard, match);
+    lastMove = [`${match.r1},${match.c1}`, `${match.r2},${match.c2}`];
+    moveLog.push(`${String.fromCharCode(97 + match.c1)}${8 - match.r1}→${String.fromCharCode(97 + match.c2)}${8 - match.r2}`);
+    playSound(match.jump ? "capture" : "move");
+
+    chkTurn = 3 - side;
+    if (getCheckersMoves(chkBoard, chkTurn).length === 0) {
+      finishMatch(side, "no moves left");
+    }
+  } else if (gameType === "c4") {
+    const r = dropC4(c4Board, mv.col, side);
+    if (r === -1) return false;
+    lastMove = [`${r},${mv.col}`];
+    moveLog.push(`Col ${mv.col + 1}`);
+    playSound("move");
+
+    if (checkC4Win(c4Board, r, mv.col, side)) {
+      finishMatch(side, "4 in a row");
+    } else if (c4Board[0].every(x => x !== 0)) {
+      finishMatch(3, "board full");
+    } else {
+      c4Turn = 3 - side;
+    }
   }
 
+  selected = null;
+  legalTargets = [];
+  renderAll();
+  syncToPeer();
+
+  if (mode === "bot" && allowBotReply && winner === 0 && getCurrentTurn() === 2) {
+    setTimeout(runBotTurn, 280);
+  }
+  return true;
+}
+
+// ==========================================
+// 6. SMART BOT AI (MINIMAX)
+// ==========================================
+function runBotTurn() {
+  if (winner !== 0) return;
+  if (gameType === "chess") {
+    const moves = chess.moves({ verbose: true });
+    if (!moves.length) return;
+    let bestScore = Infinity;
+    let bestMoves = [];
+    for (const m of moves) {
+      chess.move(m);
+      const score = minimaxChess(1, -Infinity, Infinity, true);
+      chess.undo();
+      if (score < bestScore) { bestScore = score; bestMoves = [m]; }
+      else if (score === bestScore) bestMoves.push(m);
+    }
+    const pick = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    executeMove({ from: pick.from, to: pick.to, promotion: pick.promotion || "q" }, 2, false);
+  } else if (gameType === "checkers") {
+    const moves = getCheckersMoves(chkBoard, 2);
+    if (!moves.length) return;
+    const pick = moves[Math.floor(Math.random() * moves.length)];
+    executeMove(pick, 2, false);
+  } else if (gameType === "c4") {
+    const valid = [0,1,2,3,4,5,6].filter(c => c4Board[0][c] === 0);
+    for (const p of [2, 1]) {
+      for (const c of valid) {
+        const copy = c4Board.map(r => [...r]);
+        const r = dropC4(copy, c, p);
+        if (checkC4Win(copy, r, c, p)) {
+          executeMove({ col: c }, 2, false);
+          return;
+        }
+      }
+    }
+    valid.sort((a, b) => Math.abs(3 - a) - Math.abs(3 - b));
+    executeMove({ col: valid[0] }, 2, false);
+  }
+}
+
+function evalChessBoard() {
+  if (chess.in_checkmate()) return chess.turn() === "w" ? -9999 : 9999;
+  if (chess.in_draw()) return 0;
+  let total = 0;
+  const b = chess.board();
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = b[r][c];
+      if (!p) continue;
+      const centerBonus = (r >= 2 && r <= 5 && c >= 2 && c <= 5) ? 0.15 : 0;
+      const v = PIECE_VAL[p.type] + centerBonus;
+      total += p.color === "w" ? v : -v;
+    }
+  }
+  return total;
+}
+
+function minimaxChess(depth, alpha, beta, isMax) {
+  if (depth === 0 || chess.game_over()) return evalChessBoard();
+  const moves = chess.moves({ verbose: true });
+  if (isMax) {
+    let maxEval = -Infinity;
+    for (const m of moves) {
+      chess.move(m);
+      maxEval = Math.max(maxEval, minimaxChess(depth - 1, alpha, beta, false));
+      chess.undo();
+      alpha = Math.max(alpha, maxEval);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const m of moves) {
+      chess.move(m);
+      minEval = Math.min(minEval, minimaxChess(depth - 1, alpha, beta, true));
+      chess.undo();
+      beta = Math.min(beta, minEval);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
+function getCheckersMoves(b, side) {
+  const steps = [], jumps = [];
+  const mine = side === 1 ? [1, 3] : [2, 4];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const v = b[r][c];
+      if (!mine.includes(v)) continue;
+      const dirs = v > 2 ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (side === 1 ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]]);
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+          if (b[nr][nc] === 0) steps.push({ r1: r, c1: c, r2: nr, c2: nc, jump: false });
+          else if (!mine.includes(b[nr][nc])) {
+            const jr = r + dr * 2, jc = c + dc * 2;
+            if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8 && b[jr][jc] === 0) {
+              jumps.push({ r1: r, c1: c, r2: jr, c2: jc, jump: true });
+            }
+          }
+        }
+      }
+    }
+  }
+  return jumps.length ? jumps : steps;
+}
+
+function applyCheckersMove(b, m) {
+  let v = b[m.r1][m.c1];
+  b[m.r1][m.c1] = 0;
+  if ((v === 1 && m.r2 === 0) || (v === 2 && m.r2 === 7)) v += 2;
+  b[m.r2][m.c2] = v;
+  if (m.jump) b[(m.r1 + m.r2) / 2][(m.c1 + m.c2) / 2] = 0;
+}
+
+function dropC4(b, col, side) {
+  if (col < 0 || col > 6 || b[0][col] !== 0) return -1;
+  for (let r = 5; r >= 0; r--) {
+    if (b[r][col] === 0) { b[r][col] = side; return r; }
+  }
+  return -1;
+}
+
+function checkC4Win(b, r, c, side) {
+  for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+    let cnt = 1;
+    for (const s of [-1, 1]) {
+      let nr = r + dr * s, nc = c + dc * s;
+      while (nr >= 0 && nr < 6 && nc >= 0 && nc < 7 && b[nr][nc] === side) {
+        cnt++; nr += dr * s; nc += dc * s;
+      }
+    }
+    if (cnt >= 4) return true;
+  }
+  return false;
+}
+
+// ==========================================
+// 7. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
+// ==========================================
+function resignGame() {
+  if (winner !== 0) return;
+  if (mode === "guest") {
+    sendRoomMsg({ type: "resign" });
+  } else {
+    finishMatch(3 - mySide, "by resignation");
+    syncToPeer();
+  }
+}
+
+function offerDraw() {
+  if (winner !== 0 || mode === "bot") return;
+  sendRoomMsg({ type: "draw_offer" });
+  setBanner("Draw offer sent...");
+}
+
+function requestRematch() {
+  if (mode === "bot") {
+    startLocalBot();
+  } else if (mode === "host") {
+    initMatch(gameType, baseTime, opponentName, mySide === 1 ? 2 : 1);
+    syncToPeer();
+  } else if (mode === "guest") {
+    sendRoomMsg({ type: "rematch" });
+  }
+}
+
+// ==========================================
+// 8. RENDER BOARD, CAPTURED PIECES & UI
+// ==========================================
+function setBanner(msg) {
+  document.getElementById("statusBanner").textContent = msg;
+}
+
+function updateClockUI() {
+  const oppSide = 3 - mySide;
+  const turn = getCurrentTurn();
+  const topEl = document.getElementById("topClock");
+  const botEl = document.getElementById("botClock");
+
+  topEl.textContent = formatClock(clocks[oppSide]);
+  botEl.textContent = formatClock(clocks[mySide]);
+
+  topEl.className = "clock" + (winner === 0 && turn === oppSide ? " active" : "") + (clocks[oppSide] <= 10 && baseTime > 0 ? " low" : "");
+  botEl.className = "clock" + (winner === 0 && turn === mySide ? " active" : "") + (clocks[mySide] <= 10 && baseTime > 0 ? " low" : "");
+}
+
+function updateCapturedUI() {
+  const topCap = document.getElementById("topCap");
+  const botCap = document.getElementById("botCap");
+  if (gameType !== "chess") { topCap.textContent = ""; botCap.textContent = ""; return; }
+
+  const start = { p:8, n:2, b:2, r:2, q:1 };
+  const curW = { p:0, n:0, b:0, r:0, q:0 };
+  const curB = { p:0, n:0, b:0, r:0, q:0 };
+  for (const row of chess.board()) {
+    for (const sq of row) {
+      if (!sq || sq.type === "k") continue;
+      if (sq.color === "w") curW[sq.type]++; else curB[sq.type]++;
+    }
+  }
+  let wLost = "", bLost = "", wMat = 0, bMat = 0;
+  for (const t of ["q","r","b","n","p"]) {
+    const mw = Math.max(0, start[t] - curW[t]);
+    const mb = Math.max(0, start[t] - curB[t]);
+    wLost += CHESS_GLYPHS["w" + t.toUpperCase()].repeat(mw);
+    bLost += CHESS_GLYPHS["b" + t.toUpperCase()].repeat(mb);
+    wMat += curW[t] * PIECE_VAL[t];
+    bMat += curB[t] * PIECE_VAL[t];
+  }
+  const diff = wMat - bMat;
+  const wStr = bLost + (diff > 0 ? ` +${diff}` : "");
+  const bStr = wLost + (diff < 0 ? ` +${Math.abs(diff)}` : "");
+  botCap.textContent = mySide === 1 ? wStr : bStr;
+  topCap.textContent = mySide === 1 ? bStr : wStr;
+}
+
+function renderAll() {
+  const oppSide = 3 - mySide;
+  document.getElementById("botName").textContent = `${guestId} (You)`;
+  document.getElementById("topName").textContent = opponentName;
+  document.getElementById("botAvatar").textContent = mySide === 1 ? "P1" : "P2";
+  document.getElementById("topAvatar").textContent = oppSide === 1 ? "P1" : "P2";
+
+  updateClockUI();
+  updateCapturedUI();
+
+  if (winner === 3) setBanner(`Draw (${endReason})`);
+  else if (winner === mySide) setBanner(`You Won ${endReason}!`);
+  else if (winner === oppSide) setBanner(`${opponentName} Won ${endReason}`);
+  else {
+    const myTurn = getCurrentTurn() === mySide;
+    const chk = (gameType === "chess" && chess.in_check()) ? " — CHECK!" : "";
+    setBanner((myTurn ? "Your Turn" : `${opponentName}'s Turn`) + chk);
+  }
+
+  const box = document.getElementById("movesBox");
+  box.innerHTML = "";
+  for (let i = 0; i < moveLog.length; i += 2) {
+    const row = document.createElement("div");
+    row.className = "move-row";
+    row.innerHTML = `<span class="move-num">${Math.floor(i/2)+1}.</span><span>${moveLog[i]}</span><span>${moveLog[i+1] || ""}</span>`;
+    box.appendChild(row);
+  }
+  box.scrollTop = box.scrollHeight;
+
+  renderBoard();
+}
+
+function renderBoard() {
   const bd = document.getElementById("board");
   bd.innerHTML = "";
 
-  if (gameState.game === "c4") {
+  if (gameType === "c4") {
     bd.style.gridTemplateColumns = "repeat(7, 1fr)";
     for (let r = 0; r < 6; r++) {
       for (let c = 0; c < 7; c++) {
-        const cell = document.createElement("div");
-        cell.className = "cell c4-cell";
+        const sq = document.createElement("div");
+        sq.className = "c4-sq";
         const hole = document.createElement("div");
-        const v = gameState.board[r][c];
-        hole.className = "hole" + (v === 1 ? " p1" : v === 2 ? " p2" : "");
-        cell.appendChild(hole);
-        cell.onclick = () => {
-          if (gameState.turn === myPlayer && gameState.winner === 0) submitMove({ col: c });
-        };
-        bd.appendChild(cell);
+        const v = c4Board[r][c];
+        hole.className = "c4-hole" + (v === 1 ? " p1" : v === 2 ? " p2" : "");
+        sq.appendChild(hole);
+        sq.onclick = () => requestMove({ col: c });
+        bd.appendChild(sq);
       }
     }
     return;
   }
 
   bd.style.gridTemplateColumns = "repeat(8, 1fr)";
-  const rows = myPlayer === 2 ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
-  const cols = myPlayer === 2 ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const rows = mySide === 2 ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const cols = mySide === 2 ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
 
-  for (const r of rows) {
-    for (const c of cols) {
-      const cell = document.createElement("div");
-      const isSel = selected && selected[0] === r && selected[1] === c;
-      cell.className = "cell " + ((r + c) % 2 === 0 ? "light" : "dark") + (isSel ? " sel" : "");
-      const v = gameState.board[r][c];
+  if (gameType === "chess") {
+    const b = chess.board();
+    const inCheck = chess.in_check();
+    const turnColor = chess.turn();
 
-      if (gameState.game === "chess" && v) {
-        const span = document.createElement("span");
-        span.textContent = CHESS_ICONS[v] || v;
-        span.className = v === v.toUpperCase() ? "w-piece" : "b-piece";
-        cell.appendChild(span);
-      } else if (gameState.game === "checkers" && v) {
-        const disc = document.createElement("div");
-        disc.className = "disc " + (v % 2 === 1 ? "p1" : "p2");
-        disc.textContent = v > 2 ? "K" : "";
-        cell.appendChild(disc);
-      }
+    for (let ri = 0; ri < 8; ri++) {
+      for (let ci = 0; ci < 8; ci++) {
+        const r = rows[ri], c = cols[ci];
+        const sqName = String.fromCharCode(97 + c) + (8 - r);
+        const piece = b[r][c];
+        const sq = document.createElement("div");
 
-      cell.onclick = () => {
-        if (gameState.turn !== myPlayer || gameState.winner !== 0) return;
-        if (!selected) {
-          const isMine = gameState.game === "chess"
-            ? (v && (myPlayer === 1 ? v === v.toUpperCase() : v === v.toLowerCase()))
-            : (v && (v % 2 === (myPlayer === 1 ? 1 : 0)));
-          if (isMine) {
-            selected = [r, c];
-            renderBoard();
-          }
-        } else {
-          if (selected[0] === r && selected[1] === c) {
-            selected = null;
-            renderBoard();
-          } else {
-            submitMove({ r1: selected[0], c1: selected[1], r2: r, c2: c });
-            selected = null;
-          }
+        let cls = "sq " + ((r + c) % 2 === 0 ? "light" : "dark");
+        if (lastMove && lastMove.includes(sqName)) cls += " last";
+        if (selected === sqName) cls += " sel";
+        if (inCheck && piece && piece.type === "k" && piece.color === turnColor) cls += " check";
+        sq.className = cls;
+
+        if (ci === 0) {
+          const rk = document.createElement("span");
+          rk.className = "coord rank"; rk.textContent = 8 - r;
+          sq.appendChild(rk);
         }
-      };
-      bd.appendChild(cell);
+        if (ri === 7) {
+          const fl = document.createElement("span");
+          fl.className = "coord file"; fl.textContent = String.fromCharCode(97 + c);
+          sq.appendChild(fl);
+        }
+
+        if (piece) {
+          const span = document.createElement("span");
+          span.className = "piece " + piece.color;
+          span.textContent = CHESS_GLYPHS[piece.color + piece.type.toUpperCase()];
+          sq.appendChild(span);
+        }
+
+        const targetMove = legalTargets.find(m => m.to === sqName);
+        if (targetMove) {
+          const marker = document.createElement("div");
+          marker.className = piece ? "ring" : "dot";
+          sq.appendChild(marker);
+        }
+
+        sq.onclick = () => onChessSquareClick(sqName, piece);
+        bd.appendChild(sq);
+      }
+    }
+  } else if (gameType === "checkers") {
+    for (let ri = 0; ri < 8; ri++) {
+      for (let ci = 0; ci < 8; ci++) {
+        const r = rows[ri], c = cols[ci];
+        const key = `${r},${c}`;
+        const v = chkBoard[r][c];
+        const sq = document.createElement("div");
+        let cls = "sq " + ((r + c) % 2 === 0 ? "light" : "dark");
+        if (lastMove && lastMove.includes(key)) cls += " last";
+        if (selected === key) cls += " sel";
+        sq.className = cls;
+
+        if (v) {
+          const disc = document.createElement("div");
+          disc.className = "chk-disc " + (v % 2 === 1 ? "p1" : "p2");
+          disc.textContent = v > 2 ? "K" : "";
+          sq.appendChild(disc);
+        }
+
+        const targetMove = legalTargets.find(m => m.r2 === r && m.c2 === c);
+        if (targetMove) {
+          const dot = document.createElement("div");
+          dot.className = "dot";
+          sq.appendChild(dot);
+        }
+
+        sq.onclick = () => onCheckersSquareClick(r, c, v);
+        bd.appendChild(sq);
+      }
     }
   }
 }
+
+function onChessSquareClick(sqName, piece) {
+  if (winner !== 0 || getCurrentTurn() !== mySide) return;
+  const myColor = mySide === 1 ? "w" : "b";
+
+  const target = legalTargets.find(m => m.to === sqName);
+  if (target) {
+    if (target.flags.includes("p")) {
+      showPromotionPicker(target.from, target.to, myColor);
+    } else {
+      requestMove({ from: target.from, to: target.to });
+    }
+    return;
+  }
+
+  if (piece && piece.color === myColor) {
+    selected = sqName;
+    legalTargets = chess.moves({ square: sqName, verbose: true });
+  } else {
+    selected = null;
+    legalTargets = [];
+  }
+  renderBoard();
+}
+
+function showPromotionPicker(from, to, color) {
+  const modal = document.getElementById("promoModal");
+  const box = document.getElementById("promoChoices");
+  box.innerHTML = "";
+  for (const p of ["q", "r", "b", "n"]) {
+    const btn = document.createElement("button");
+    btn.className = "promo-btn";
+    btn.textContent = CHESS_GLYPHS[color + p.toUpperCase()];
+    btn.onclick = () => {
+      modal.style.display = "none";
+      requestMove({ from, to, promotion: p });
+    };
+    box.appendChild(btn);
+  }
+  modal.style.display = "flex";
+}
+
+function onCheckersSquareClick(r, c, v) {
+  if (winner !== 0 || getCurrentTurn() !== mySide) return;
+  const target = legalTargets.find(m => m.r2 === r && m.c2 === c);
+  if (target) {
+    requestMove(target);
+    return;
+  }
+  const isMine = v && (v % 2 === (mySide === 1 ? 1 : 0));
+  if (isMine) {
+    selected = `${r},${c}`;
+    legalTargets = getCheckersMoves(chkBoard, mySide).filter(m => m.r1 === r && m.c1 === c);
+  } else {
+    selected = null;
+    legalTargets = [];
+  }
+  renderBoard();
+}
+
+startLocalBot();
 </script>
 </body>
 </html>
