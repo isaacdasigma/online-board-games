@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Board Game Hub</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #181a1f; color: #f1f5f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+    .card { background: #232730; padding: 20px; border-radius: 12px; width: 100%; max-width: 440px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .row { display: flex; gap: 10px; margin-top: 12px; }
+    select, input, button { padding: 10px; border-radius: 8px; border: none; font-size: 15px; }
+    select, input { background: #14161b; color: white; flex: 1; }
+    button { background: #3b82f6; color: white; font-weight: bold; cursor: pointer; }
+    button:hover { background: #2563eb; }
+    button.secondary { background: #10b981; }
+    #board { display: grid; margin-top: 16px; border: 3px solid #334155; user-select: none; }
+    .cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer; }
+    .light { background: #cbd5e1; color: #0f172a; }
+    .dark { background: #64748b; color: #0f172a; }
+    .selected { outline: 4px solid #facc15; z-index: 2; }
+    .disc { width: 72%; height: 72%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; color: white; }
+    .p0 { background: #ef4444; }
+    .p1 { background: #eab308; color: #111; }
+    .c4-cell { background: #1d4ed8; padding: 5px; }
+    .c4-hole { width: 100%; height: 100%; border-radius: 50%; background: #181a1f; }
+    .badge { background: #334155; padding: 4px 10px; border-radius: 99px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div style="margin-bottom: 12px;"><span class="badge" id="userBadge">Connecting...</span></div>
+
+  <!-- LOBBY -->
+  <div id="lobby" class="card">
+    <h2 style="margin-top:0">Start a Match</h2>
+    <select id="gameSelect" style="width:100%">
+      <option value="chess">Chess</option>
+      <option value="checkers">Checkers</option>
+      <option value="connect4">Connect 4</option>
+    </select>
+    <div class="row">
+      <button onclick="createRoom(true)" style="flex:1">Play vs Bot</button>
+      <button class="secondary" onclick="createRoom(false)" style="flex:1">Play vs Friend</button>
+    </div>
+    <hr style="border-color:#334155; margin: 20px 0;">
+    <div class="row">
+      <input id="codeInput" placeholder="Enter 4-letter code" maxlength="4" style="text-transform:uppercase" />
+      <button onclick="joinRoom()">Join Room</button>
+    </div>
+  </div>
+
+  <!-- GAME ARENA -->
+  <div id="arena" class="card" style="display:none">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>Room: <span id="roomCode" style="color:#38bdf8"></span></strong>
+      <button onclick="location.reload()" style="padding:6px 10px; font-size:13px; background:#475569">Leave</button>
+    </div>
+    <p id="playersText" style="margin: 8px 0; font-size:14px; color:#94a3b8"></p>
+    <h3 id="statusText" style="margin: 8px 0; color:#facc15"></h3>
+    <div id="board"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let myName = '';
+    let currentRoom = null;
+    let selected = null;
+
+    const CHESS_ICONS = {
+      wp:'♙', wr:'♖', wn:'♘', wb:'♗', wq:'♕', wk:'♔',
+      bp:'♟', br:'♜', bn:'♞', bb:'♝', bq:'♛', bk:'♚'
+    };
+
+    // 1. Auto-authenticate device
+    socket.on('connect', () => {
+      socket.emit('auth', { token: localStorage.getItem('guestToken') });
+    });
+
+    socket.on('auth_ok', ({ token, username }) => {
+      localStorage.setItem('guestToken', token);
+      myName = username;
+      document.getElementById('userBadge').textContent = `Signed in as ${username}`;
+    });
+
+    socket.on('error_msg', (msg) => alert(msg));
+
+    function createRoom(vsBot) {
+      const gameType = document.getElementById('gameSelect').value;
+      socket.emit('create_room', { gameType, vsBot });
+    }
+
+    function joinRoom() {
+      const code = document.getElementById('codeInput').value;
+      socket.emit('join_room', { code });
+    }
+
+    socket.on('room_update', (room) => {
+      currentRoom = room;
+      document.getElementById('lobby').style.display = 'none';
+      document.getElementById('arena').style.display = 'block';
+      document.getElementById('roomCode').textContent = room.code;
+      document.getElementById('playersText').textContent = `${room.players[0]} (P1) vs ${room.players[1]} (P2)`;
+
+      const s = room.state;
+      const statusEl = document.getElementById('statusText');
+      if (s.status === 'finished') {
+        statusEl.textContent = s.winner === 'draw' ? 'Game Over: Draw!' : `Winner: ${room.players[s.winner]}!`;
+      } else {
+        statusEl.textContent = `Turn: ${room.players[s.turn]}`;
+      }
+      renderBoard(s);
+    });
+
+    function toAlgebraic(r, c) {
+      return String.fromCharCode(97 + c) + (8 - r);
+    }
+
+    function renderBoard(s) {
+      const boardEl = document.getElementById('board');
+      boardEl.innerHTML = '';
+
+      if (s.type === 'connect4') {
+        boardEl.style.gridTemplateColumns = 'repeat(7, 1fr)';
+        for (let r = 0; r < 6; r++) {
+          for (let c = 0; c < 7; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell c4-cell';
+            const hole = document.createElement('div');
+            hole.className = 'c4-hole' + (s.board[r][c] === 1 ? ' p0' : s.board[r][c] === 2 ? ' p1' : '');
+            cell.appendChild(hole);
+            cell.onclick = () => socket.emit('make_move', { col: c });
+            boardEl.appendChild(cell);
+          }
+        }
+        return;
+      }
+
+      // 8x8 Grid (Chess & Checkers)
+      boardEl.style.gridTemplateColumns = 'repeat(8, 1fr)';
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+          if (selected && selected[0] === r && selected[1] === c) cell.classList.add('selected');
+
+          if (s.type === 'chess') {
+            const piece = s.board[r][c];
+            if (piece) cell.textContent = CHESS_ICONS[piece.color + piece.type];
+            cell.onclick = () => {
+              if (!selected) {
+                if (piece) { selected = [r, c]; renderBoard(s); }
+              } else {
+                socket.emit('make_move', { from: toAlgebraic(selected[0], selected[1]), to: toAlgebraic(r, c) });
+                selected = null;
+                renderBoard(s);
+              }
+            };
+          } else if (s.type === 'checkers') {
+            const piece = s.board[r][c];
+            if (piece) {
+              const disc = document.createElement('div');
+              disc.className = `disc p${piece.p}`;
+              disc.textContent = piece.k ? '👑' : '';
+              cell.appendChild(disc);
+            }
+            cell.onclick = () => {
+              if (!selected) {
+                if (piece) { selected = [r, c]; renderBoard(s); }
+              } else {
+                socket.emit('make_move', { from: selected, to: [r, c] });
+                selected = null;
+                renderBoard(s);
+              }
+            };
+          }
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
