@@ -47,7 +47,7 @@
       z-index: 20;
     }
     .nav-inner {
-      max-width: 1020px;
+      max-width: 1060px;
       width: 100%;
       display: flex;
       align-items: center;
@@ -105,6 +105,7 @@
       border: 1px solid var(--border); color: var(--muted);
     }
     .pill.online { background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399; }
+    .pill.pico-on { background: rgba(56, 189, 248, 0.15); border-color: #38bdf8; color: #7dd3fc; }
     .live-dot {
       width: 7px; height: 7px; border-radius: 50%;
       background: #10b981; box-shadow: 0 0 6px #10b981;
@@ -112,16 +113,16 @@
 
     /* MAIN ARENA LAYOUT */
     .arena {
-      max-width: 1020px;
+      max-width: 1060px;
       width: 100%;
       padding: 20px 16px;
       display: grid;
-      grid-template-columns: minmax(300px, 500px) minmax(290px, 380px);
+      grid-template-columns: minmax(300px, 500px) minmax(300px, 390px);
       gap: 24px;
       justify-content: center;
       align-items: start;
     }
-    @media (max-width: 840px) {
+    @media (max-width: 860px) {
       .arena { grid-template-columns: minmax(290px, 500px); }
     }
 
@@ -141,7 +142,7 @@
       width: 34px; height: 34px; border-radius: 9px;
       background: var(--card-alt); border: 1px solid var(--border);
       display: flex; align-items: center; justify-content: center;
-      font-weight: 800; font-size: 13px; color: #38bdf8;
+      font-weight: 800; font-size: 12px; color: #38bdf8;
     }
     .p-title { font-weight: 700; font-size: 14px; }
     .cap-row {
@@ -284,19 +285,23 @@
       font-size: 11px; font-weight: 800; text-transform: uppercase;
       letter-spacing: 0.8px; color: var(--muted);
     }
+    .field-lbl {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      margin-bottom: 3px; display: block;
+    }
     .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     select, input, button.btn {
       font-family: inherit; font-size: 13px; font-weight: 700;
-      border-radius: 9px; padding: 10px 12px;
-      border: 1px solid var(--border);
+      border-radius: 9px; padding: 9px 10px;
+      border: 1px solid var(--border); width: 100%;
     }
     select, input { background: var(--bg); color: var(--text); }
-    input { text-align: center; width: 100%; }
+    input { text-align: center; }
     button.btn { background: var(--card-alt); color: var(--text); cursor: pointer; transition: 0.15s; }
     button.btn:hover { border-color: #38bdf8; }
     button.btn.cta {
       background: linear-gradient(135deg, var(--primary), var(--cyan));
-      border: none; color: #ffffff; font-size: 15px; padding: 12px;
+      border: none; color: #ffffff; font-size: 14px; padding: 11px;
     }
     button.btn.cta:hover { filter: brightness(1.1); }
     button.btn.spectate-active {
@@ -319,7 +324,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      height: 150px;
+      height: 140px;
       overflow-y: auto;
       padding: 8px;
       font-size: 13px;
@@ -347,7 +352,8 @@
     </div>
 
     <div class="pills">
-      <span class="pill online" id="onlineCountBadge"><span class="live-dot"></span><span id="onlineCountText">1 Online</span></span>
+      <span class="pill online"><span class="live-dot"></span><span id="onlineCountText">1 Online</span></span>
+      <span class="pill" id="picoStatusBadge">Pico: Offline</span>
       <span class="pill" id="netBadge">Connecting...</span>
       <span class="pill" id="guestBadge">guest_0000</span>
     </div>
@@ -387,12 +393,40 @@
     </div>
   </div>
 
-  <!-- RIGHT: MATCHMAKING & LOGS -->
+  <!-- RIGHT: MATCHMAKING & BOT CONFIG -->
   <div class="dock">
     <div class="panel">
       <div class="panel-label">
-        <span>Arena Modes</span>
+        <span>Bot & Match Setup</span>
         <span id="engineBadge" style="color:#38bdf8;">Engine: Loading...</span>
+      </div>
+
+      <div class="row-2">
+        <div>
+          <span class="field-lbl">Bot 1 (Opponent / White)</span>
+          <select id="bot1Select">
+            <option value="1">Casual (~1000)</option>
+            <option value="2">Club (~1600)</option>
+            <option value="3" selected>Master (~2200)</option>
+            <option value="4">Stockfish GM</option>
+            <option value="pico">Pico 2 W (Wi-Fi)</option>
+          </select>
+        </div>
+        <div>
+          <span class="field-lbl">Bot 2 (Spectate Black)</span>
+          <select id="bot2Select">
+            <option value="1" selected>Casual (~1000)</option>
+            <option value="2">Club (~1600)</option>
+            <option value="3">Master (~2200)</option>
+            <option value="4">Stockfish GM</option>
+            <option value="pico">Pico 2 W (Wi-Fi)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row-2">
+        <button class="btn" onclick="startLocalBot()">Play vs Bot 1</button>
+        <button class="btn" id="btnSpectate" onclick="startSpectateBots()">Spectate Bot 1 vs 2</button>
       </div>
 
       <div class="row-2">
@@ -402,20 +436,8 @@
           <option value="600">10 min Rapid</option>
           <option value="0">Untimed</option>
         </select>
-        <select id="botLevelSelect">
-          <option value="1">Bot: Casual</option>
-          <option value="2">Bot: Club</option>
-          <option value="3" selected>Bot: Master</option>
-          <option value="4">Bot: Stockfish GM</option>
-        </select>
+        <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
       </div>
-
-      <div class="row-2">
-        <button class="btn" onclick="startLocalBot()">Play vs Bot</button>
-        <button class="btn" id="btnSpectate" onclick="startSpectateBots()">Spectate Bots</button>
-      </div>
-
-      <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
 
       <div class="row-2">
         <button class="btn" onclick="hostFriendRoom()">Create Room</button>
@@ -494,11 +516,13 @@ function playSound(type) {
 }
 
 // ==========================================
-// 2. STOCKFISH WEB WORKER + FALLBACK AI
+// 2. STOCKFISH WEB WORKER + PICO CALLBACKS
 // ==========================================
 let sfWorker = null;
 let sfReady = false;
 let sfCallback = null;
+let pendingPicoReq = null;
+let lastPicoSeen = 0;
 
 async function initStockfish() {
   const badge = document.getElementById("engineBadge");
@@ -533,6 +557,21 @@ async function initStockfish() {
 }
 initStockfish();
 
+function isPicoOnline() {
+  return (Date.now() - lastPicoSeen) < 18000;
+}
+
+setInterval(() => {
+  const el = document.getElementById("picoStatusBadge");
+  if (isPicoOnline()) {
+    el.textContent = "Pico: Online";
+    el.className = "pill pico-on";
+  } else {
+    el.textContent = "Pico: Offline";
+    el.className = "pill";
+  }
+}, 2000);
+
 // ==========================================
 // 3. CRISP VECTOR SVG CHESS PIECES
 // ==========================================
@@ -566,7 +605,8 @@ let clockTimer = null;
 let winner = 0;
 let endReason = "";
 let bottomTitle = `${guestId} (You)`;
-let opponentName = "Stockfish Bot";
+let opponentName = "Master Bot";
+let botConfig = { 1: "3", 2: "3" }; // Side 1 bot level, Side 2 bot level
 let selected = null;
 let legalTargets = [];
 let lastMove = null;
@@ -594,6 +634,7 @@ function selectGame(g) {
 function initMatch(gType, tSec, oppName, side, botTitleOverride = null) {
   currentMatchId++;
   sfCallback = null;
+  pendingPicoReq = null;
   gameType = gType;
   selectedGame = gType;
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -674,7 +715,7 @@ function finishMatch(winSide, reason) {
 }
 
 // ==========================================
-// 6. GLOBAL RELAY + LIVE ONLINE PLAYER COUNTER
+// 6. GLOBAL RELAY + PICO WIFI BRIDGE
 // ==========================================
 const BROKERS = [
   "wss://mqtt.eclipseprojects.io:443/mqtt",
@@ -682,6 +723,10 @@ const BROKERS = [
   "wss://broker.hivemq.com:8884/mqtt"
 ];
 const PRESENCE_TOPIC = "boardhub/v1/presence";
+const PICO_REQ_TOPIC = "boardhub/v1/pico/req";
+const PICO_RES_TOPIC = "boardhub/v1/pico/res";
+const PICO_STATUS_TOPIC = "boardhub/v1/pico/status";
+
 let mqttClient = null;
 let lobbyTopic = "";
 let roomTopic = "";
@@ -748,6 +793,8 @@ function connectGlobalRelay(onReady = null, brokerIdx = 0) {
     mqttClient = client;
     setNetStatus("Connected", true);
     client.subscribe(PRESENCE_TOPIC);
+    client.subscribe(PICO_STATUS_TOPIC);
+    client.subscribe(PICO_RES_TOPIC);
     sendHeartbeat();
     client.on("message", handleIncomingPacket);
     if (onReady) onReady();
@@ -780,33 +827,44 @@ function sendRoomMsg(obj) {
   mqttClient.publish(roomTopic, JSON.stringify(obj));
 }
 
-// Connect immediately on load so the live player count is always active
 connectGlobalRelay();
 
 // ==========================================
 // 7. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
 // ==========================================
-function getBotLabel() {
-  const lvl = document.getElementById("botLevelSelect").value;
-  if (lvl === "1") return "Casual Bot";
-  if (lvl === "2") return "Club Bot";
-  if (lvl === "3") return "Master Bot";
+function getBotName(val) {
+  if (val === "pico") return "Pico 2 W Bot";
+  if (val === "1") return "Casual Bot";
+  if (val === "2") return "Club Bot";
+  if (val === "3") return "Master Bot";
   return "Stockfish GM";
 }
 
 function startLocalBot() {
   clearMatchmakingState();
+  const b1 = document.getElementById("bot1Select").value;
+  if (b1 === "pico" && !isPicoOnline()) {
+    setBanner("Pico 2 W is offline — plug it into Wi-Fi first!");
+    return;
+  }
   mode = "bot";
+  botConfig = { 1: "3", 2: b1 };
   const t = parseInt(document.getElementById("timeSelect").value, 10);
-  initMatch(selectedGame, t, getBotLabel(), 1);
+  initMatch(selectedGame, t, getBotName(b1), 1);
 }
 
 function startSpectateBots() {
   clearMatchmakingState();
+  const b1 = document.getElementById("bot1Select").value;
+  const b2 = document.getElementById("bot2Select").value;
+  if ((b1 === "pico" || b2 === "pico") && !isPicoOnline()) {
+    setBanner("Pico 2 W is offline — plug it into Wi-Fi first!");
+    return;
+  }
   mode = "spectate";
+  botConfig = { 1: b1, 2: b2 };
   const t = parseInt(document.getElementById("timeSelect").value, 10);
-  const label = getBotLabel();
-  initMatch(selectedGame, t, `${label} (Black)`, 1, `${label} (White)`);
+  initMatch(selectedGame, t, `${getBotName(b2)} (Black)`, 1, `${getBotName(b1)} (White)`);
   const mId = currentMatchId;
   setTimeout(() => runBotTurn(1, mId), 500);
 }
@@ -887,6 +945,33 @@ function handleIncomingPacket(topic, payloadBuf) {
     return;
   }
   if (!msg) return;
+
+  // Pico 2 W Status & Move Responses
+  if (topic === PICO_STATUS_TOPIC) {
+    lastPicoSeen = Date.now();
+    return;
+  }
+  if (topic === PICO_RES_TOPIC) {
+    lastPicoSeen = Date.now();
+    if (pendingPicoReq && msg.reqId === pendingPicoReq.reqId) {
+      const { botSide, reqMatchId } = pendingPicoReq;
+      pendingPicoReq = null;
+      if (reqMatchId !== currentMatchId || winner !== 0) return;
+
+      if (msg.game === "chess" && msg.uci) {
+        executeMove({
+          from: msg.uci.slice(0, 2),
+          to: msg.uci.slice(2, 4),
+          promotion: msg.uci[4] || "q"
+        }, botSide, false);
+      } else if (msg.game === "checkers" && msg.move) {
+        executeMove(msg.move, botSide, false);
+      } else if (msg.game === "c4" && msg.move) {
+        executeMove(msg.move, botSide, false);
+      }
+    }
+    return;
+  }
 
   // Presence Heartbeat
   if (topic === PRESENCE_TOPIC) {
@@ -1097,24 +1182,55 @@ function executeMove(mv, side, triggerNextBot) {
     if (mode === "bot" && triggerNextBot && nextSide === 2) {
       setTimeout(() => runBotTurn(2, mId), 300);
     } else if (mode === "spectate") {
-      setTimeout(() => runBotTurn(nextSide, mId), 600);
+      setTimeout(() => runBotTurn(nextSide, mId), 550);
     }
   }
   return true;
 }
 
 // ==========================================
-// 9. STOCKFISH & MINIMAX BOT ENGINE
+// 9. PICO WIFI BOT + STOCKFISH + MINIMAX
 // ==========================================
+function askPicoForMove(botSide, reqMatchId) {
+  if (!mqttClient || !mqttClient.connected) {
+    setBanner("Relay offline — cannot reach Pico 2 W");
+    return;
+  }
+  const reqId = `${myClientId}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+  pendingPicoReq = { reqId, botSide, reqMatchId };
+
+  let payload = { reqId, game: gameType };
+  if (gameType === "chess") payload.fen = chess.fen();
+  else if (gameType === "checkers") { payload.board = chkBoard; payload.side = botSide; }
+  else if (gameType === "c4") { payload.board = c4Board; payload.side = botSide; }
+
+  const raw = JSON.stringify(payload);
+  mqttClient.publish(PICO_REQ_TOPIC, raw);
+
+  // Automatic retry after 3.5s if Wi-Fi dropped the packet
+  setTimeout(() => {
+    if (pendingPicoReq && pendingPicoReq.reqId === reqId && reqMatchId === currentMatchId && winner === 0) {
+      mqttClient.publish(PICO_REQ_TOPIC, raw);
+    }
+  }, 3500);
+}
+
 function runBotTurn(botSide, reqMatchId) {
   if (reqMatchId !== currentMatchId || winner !== 0 || getCurrentTurn() !== botSide) return;
-  const lvl = parseInt(document.getElementById("botLevelSelect").value, 10);
+  const choice = botConfig[botSide];
+
+  // Route to Physical Pico 2 W over Wi-Fi
+  if (choice === "pico") {
+    askPicoForMove(botSide, reqMatchId);
+    return;
+  }
+
+  const lvl = parseInt(choice, 10) || 3;
 
   if (gameType === "chess") {
     const moves = chess.moves({ verbose: true });
     if (!moves.length) return;
 
-    // Add opening variety in Spectate mode so bot matches don't repeat identically
     if (mode === "spectate" && moveLog.length < 2) {
       const openings = moves.filter(m => ["e4","d4","c4","Nf3","e5","c5","e6","d5","Nf6"].includes(m.san));
       const pool = openings.length ? openings : moves;
@@ -1138,7 +1254,6 @@ function runBotTurn(botSide, reqMatchId) {
       sfWorker.postMessage(`position fen ${chess.fen()}`);
       sfWorker.postMessage(`go depth ${depthMap[lvl]}`);
     } else {
-      // Built-in Piece-Square + Alpha-Beta Fallback
       const depth = lvl >= 3 ? 2 : 1;
       const isMax = (botSide === 1);
       let bestScore = isMax ? -Infinity : Infinity;
@@ -1394,9 +1509,9 @@ function renderAll() {
     const turn = getCurrentTurn();
     const chk = (gameType === "chess" && chess.in_check()) ? " — CHECK!" : "";
     if (mode === "spectate") {
-      setBanner(`Spectating: ${turn === 1 ? "White / P1" : "Black / P2"} thinking${chk}`);
+      setBanner(`Spectating: ${turn === 1 ? bottomTitle : opponentName}${chk}`);
     } else {
-      setBanner((turn === mySide ? "Your Turn" : `${opponentName}'s Turn`) + chk);
+      setBanner((turn === mySide ? "Your Turn" : `${opponentName} thinking`) + chk);
     }
   }
 
