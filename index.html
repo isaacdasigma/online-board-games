@@ -139,7 +139,7 @@
       width: 100%;
       padding: 20px 16px;
       display: grid;
-      grid-template-columns: minmax(300px, 500px) minmax(300px, 410px);
+      grid-template-columns: minmax(300px, 500px) minmax(300px, 420px);
       gap: 24px;
       justify-content: center;
       align-items: start;
@@ -354,7 +354,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      height: 105px;
+      height: 92px;
       overflow-y: auto;
       padding: 8px;
       font-size: 13px;
@@ -365,12 +365,150 @@
     .m-idx { color: var(--muted); }
     .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 
+    /* ARENA CHAT PANEL (WORLD / MATCH / GROUP) */
+    .chat-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      background: var(--bg);
+      padding: 3px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      gap: 4px;
+    }
+    .chat-tab {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 4px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: 0.15s;
+    }
+    .chat-tab:hover { color: var(--text); }
+    .chat-tab.active {
+      background: var(--card-alt);
+      color: #38bdf8;
+    }
+    .unread-badge {
+      display: none;
+      background: #f43f5e;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 999px;
+      line-height: 1.2;
+    }
+    .unread-badge.show { display: inline-block; }
+
+    .group-bar {
+      display: none;
+      gap: 6px;
+      align-items: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 6px;
+      border-radius: 9px;
+    }
+    .group-bar.show { display: flex; }
+    .group-bar input {
+      padding: 6px 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      width: 78px;
+    }
+    .group-bar button.btn {
+      padding: 6px 9px;
+      font-size: 11px;
+      width: auto;
+      white-space: nowrap;
+    }
+    .group-tag {
+      font-size: 11px;
+      font-weight: 800;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid #10b981;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    .chat-feed {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      height: 150px;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12.5px;
+    }
+    .chat-msg {
+      line-height: 1.38;
+      word-break: break-word;
+      padding: 4px 7px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .chat-msg.mine {
+      background: rgba(99, 102, 241, 0.16);
+      border-left: 2px solid #818cf8;
+    }
+    .chat-msg.sys {
+      background: transparent;
+      color: var(--muted);
+      font-style: italic;
+      font-size: 11.5px;
+      text-align: center;
+      padding: 2px 4px;
+    }
+    .chat-sender {
+      font-weight: 800;
+      color: #38bdf8;
+      margin-right: 4px;
+    }
+    .chat-msg.mine .chat-sender { color: #a5b4fc; }
+    .chat-elo {
+      font-size: 10.5px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-right: 5px;
+    }
+    .chat-compose {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+    }
+    .chat-compose input {
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .chat-compose button.btn {
+      width: auto;
+      padding: 8px 14px;
+      background: var(--primary);
+      border: none;
+      color: #ffffff;
+    }
+
     /* LEADERBOARD */
     .lb-list {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      max-height: 155px;
+      max-height: 145px;
       overflow-y: auto;
       padding: 6px;
       display: flex;
@@ -514,7 +652,7 @@
     </div>
   </div>
 
-  <!-- RIGHT: MATCHMAKING, BOT CONFIG & LEADERBOARD -->
+  <!-- RIGHT: MATCHMAKING, CHAT & LEADERBOARD -->
   <div class="dock">
     <div class="panel">
       <div class="panel-label">
@@ -591,6 +729,41 @@
       <div class="status-pill" id="statusBanner">Ready to play</div>
     </div>
 
+    <!-- ARENA CHAT: WORLD / MATCH OPPONENT / GROUP CHAT -->
+    <div class="panel">
+      <div class="panel-label">
+        <span>Arena Chat</span>
+        <span id="chatChannelStatus" style="color:#38bdf8;">Worldwide Lobby</span>
+      </div>
+
+      <div class="chat-tabs">
+        <button class="chat-tab active" id="chat-tab-world" onclick="switchChatTab('world')">
+          World <span class="unread-badge" id="unread-world">0</span>
+        </button>
+        <button class="chat-tab" id="chat-tab-match" onclick="switchChatTab('match')">
+          Opponent <span class="unread-badge" id="unread-match">0</span>
+        </button>
+        <button class="chat-tab" id="chat-tab-group" onclick="switchChatTab('group')">
+          Group <span class="unread-badge" id="unread-group">0</span>
+        </button>
+      </div>
+
+      <div class="group-bar" id="groupControlsBar">
+        <span class="group-tag" id="activeGroupLabel" style="display:none;">Group: ----</span>
+        <button class="btn" id="btnCreateGroup" onclick="createGroupChat()">New Group</button>
+        <input id="groupCodeInput" placeholder="Code" maxlength="4" onkeydown="if(event.key==='Enter') joinGroupChat()" />
+        <button class="btn" id="btnJoinGroup" onclick="joinGroupChat()">Join</button>
+        <button class="btn" id="btnLeaveGroup" onclick="leaveGroupChat()" style="display:none;">Leave</button>
+      </div>
+
+      <div class="chat-feed" id="chatFeed"></div>
+
+      <div class="chat-compose">
+        <input id="chatInput" placeholder="Say something to the world..." maxlength="160" onkeydown="if(event.key==='Enter') sendChatMessage()" />
+        <button class="btn" id="btnSendChat" onclick="sendChatMessage()">Send</button>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-label">Move Log & Controls</div>
       <div class="history" id="movesBox"></div>
@@ -615,7 +788,7 @@
 <div class="modal-backdrop" id="nicknameModal">
   <div class="modal-card">
     <div class="modal-title">Set Permanent Nickname</div>
-    <div class="modal-desc">Pick your custom player name for matches and the live leaderboard (2–14 letters or numbers).</div>
+    <div class="modal-desc">Pick your custom player name for matches, chat, and the live leaderboard (2–14 letters or numbers).</div>
     <div class="modal-warn">Warning: You can only set your nickname ONCE on this device.</div>
     <input id="nicknameInput" placeholder="Enter nickname..." maxlength="14" onkeydown="if(event.key==='Enter') confirmNickname()" />
     <div class="row-2">
@@ -735,6 +908,13 @@ function playSound(type) {
     gain.gain.setValueAtTime(0.22, now);
     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
     osc.start(now); osc.stop(now + 0.45);
+  } else if (type === "chat") {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(580, now);
+    osc.frequency.exponentialRampToValueAtTime(760, now + 0.06);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.005, now + 0.07);
+    osc.start(now); osc.stop(now + 0.07);
   }
 }
 
@@ -742,7 +922,6 @@ function midiToFreq(m) {
   return 440 * Math.pow(2, (m - 69) / 12);
 }
 
-// --- Built-in Deltarune Lobby Synth ---
 let musicPlaying = false;
 let selectedMusicTrack = localStorage.getItem("bh_music_track") || "deltarune";
 let synthTimer = null;
@@ -809,8 +988,7 @@ function stepDeltaruneSynth() {
   synthStep++;
 }
 
-// --- Zero-Dependency Standard MIDI File (.mid) Parser & Scheduler ---
-let customMidiData = null; // { name, notes: [{ start, dur, midi, vel, ch, prog }], duration }
+let customMidiData = null;
 let midiSchedulerTimer = null;
 let midiStartCtxTime = 0;
 let midiNextNoteIdx = 0;
@@ -845,7 +1023,7 @@ function parseStandardMidi(arrayBuffer) {
     pos += 8;
     const trackEnd = Math.min(view.byteLength, pos + chunkLen);
 
-    if (chunkId !== 0x4d54726b) { // Not MTrk
+    if (chunkId !== 0x4d54726b) {
       pos = trackEnd;
       continue;
     }
@@ -918,7 +1096,7 @@ function parseStandardMidi(arrayBuffer) {
 
   let lastTick = 0;
   let elapsedSec = 0;
-  let usPerBeat = 500000; // Default 120 BPM
+  let usPerBeat = 500000;
   const chProg = new Array(16).fill(0);
   const active = new Map();
   const notes = [];
@@ -970,21 +1148,18 @@ function scheduleMidiPercussion(when, midiNote, vel) {
   const amp = (vel / 127) * 0.11;
 
   if (midiNote === 35 || midiNote === 36) {
-    // Kick
     osc.type = "sine";
     osc.frequency.setValueAtTime(135, when);
     osc.frequency.exponentialRampToValueAtTime(38, when + 0.12);
     gain.gain.setValueAtTime(amp * 1.4, when);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
   } else if (midiNote === 38 || midiNote === 40) {
-    // Snare
     osc.type = "triangle";
     osc.frequency.setValueAtTime(220, when);
     osc.frequency.exponentialRampToValueAtTime(90, when + 0.11);
     gain.gain.setValueAtTime(amp, when);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.12);
   } else {
-    // Hi-hat / Cymbal
     osc.type = "square";
     osc.frequency.setValueAtTime(850, when);
     gain.gain.setValueAtTime(amp * 0.35, when);
@@ -1005,17 +1180,16 @@ function scheduleCustomMidiNote(when, n) {
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
 
-  // Map GM Program families to pleasant retro synth waveforms
   let wave = "triangle";
   let scale = 0.055;
   if (n.prog >= 32 && n.prog <= 39) {
-    wave = "sine"; // Bass
+    wave = "sine";
     scale = 0.09;
   } else if (n.prog >= 80 && n.prog <= 87) {
-    wave = "square"; // Synth Lead
+    wave = "square";
     scale = 0.032;
   } else if (n.prog >= 48 && n.prog <= 79) {
-    wave = "sawtooth"; // Strings / Brass
+    wave = "sawtooth";
     scale = 0.025;
   }
 
@@ -1137,7 +1311,6 @@ function handleMidiUpload(inputEl) {
       selectedMusicTrack = "custom";
       localStorage.setItem("bh_music_track", "custom");
 
-      // Save to device storage if <= 1.5 MB
       if (buf.byteLength <= 1500000) {
         const bytes = new Uint8Array(buf);
         let bin = "";
@@ -1159,7 +1332,6 @@ function handleMidiUpload(inputEl) {
   reader.readAsArrayBuffer(file);
 }
 
-// Restore saved custom MIDI from device if present
 (function restoreSavedMidi() {
   try {
     const b64 = localStorage.getItem("bh_custom_midi_b64");
@@ -1351,7 +1523,283 @@ function applyRatedResult(winSide) {
 }
 
 // ==========================================
-// 4. STOCKFISH WEB WORKER + PICO CALLBACKS
+// 4. ARENA CHAT SYSTEM (WORLD / MATCH / GROUP)
+// ==========================================
+const WORLD_CHAT_TOPIC = "boardhub/v1/chat/world";
+const GROUP_CHAT_PREFIX = "boardhub/v1/chat/group/";
+
+let activeChatTab = "world";
+let activeGroupCode = localStorage.getItem("bh_group_code") || "";
+let lastChatSendTs = 0;
+
+const chatHistory = {
+  world: [
+    { sys: true, text: "Welcome to Worldwide Chat! Say hi to online players." }
+  ],
+  match: [
+    { sys: true, text: "Start an online match or friend room to chat with your opponent." }
+  ],
+  group: [
+    { sys: true, text: "Create a New Group or enter a 4-digit code to join friends." }
+  ]
+};
+
+const chatUnread = { world: 0, match: 0, group: 0 };
+
+function appendChatMessage(channel, entry, notifySound = false) {
+  const list = chatHistory[channel];
+  if (!list) return;
+  list.push(entry);
+  if (list.length > 65) list.shift();
+
+  if (activeChatTab === channel) {
+    renderChatFeed();
+  } else if (!entry.sys) {
+    chatUnread[channel]++;
+    updateChatBadges();
+  }
+  if (notifySound && !entry.mine && !entry.sys) {
+    playSound("chat");
+  }
+}
+
+function updateChatBadges() {
+  for (const ch of ["world", "match", "group"]) {
+    const badge = document.getElementById("unread-" + ch);
+    if (!badge) continue;
+    const count = chatUnread[ch];
+    badge.textContent = count > 9 ? "9+" : String(count);
+    badge.classList.toggle("show", count > 0);
+  }
+}
+
+function updateChatHeaderAndControls() {
+  const statusEl = document.getElementById("chatChannelStatus");
+  const groupBar = document.getElementById("groupControlsBar");
+  const inputEl = document.getElementById("chatInput");
+  const sendBtn = document.getElementById("btnSendChat");
+
+  groupBar.classList.toggle("show", activeChatTab === "group");
+
+  if (activeChatTab === "world") {
+    statusEl.textContent = "Worldwide Lobby";
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.placeholder = "Message everyone online...";
+  } else if (activeChatTab === "match") {
+    const inOnlineMatch = (mode === "host" || mode === "guest") && Boolean(roomTopic);
+    if (inOnlineMatch) {
+      statusEl.textContent = `vs ${opponentName}`;
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.placeholder = `Message ${opponentName}...`;
+    } else {
+      statusEl.textContent = "Offline / Bot Match";
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.placeholder = "Message opponent (online matches only)...";
+    }
+  } else if (activeChatTab === "group") {
+    const tagEl = document.getElementById("activeGroupLabel");
+    const createBtn = document.getElementById("btnCreateGroup");
+    const joinInp = document.getElementById("groupCodeInput");
+    const joinBtn = document.getElementById("btnJoinGroup");
+    const leaveBtn = document.getElementById("btnLeaveGroup");
+
+    if (activeGroupCode) {
+      statusEl.textContent = `Group #${activeGroupCode}`;
+      tagEl.style.display = "inline-block";
+      tagEl.textContent = `Code: ${activeGroupCode}`;
+      createBtn.style.display = "none";
+      joinInp.style.display = "none";
+      joinBtn.style.display = "none";
+      leaveBtn.style.display = "inline-block";
+      inputEl.placeholder = `Message Group #${activeGroupCode}...`;
+    } else {
+      statusEl.textContent = "No Group Joined";
+      tagEl.style.display = "none";
+      createBtn.style.display = "inline-block";
+      joinInp.style.display = "inline-block";
+      joinBtn.style.display = "inline-block";
+      leaveBtn.style.display = "none";
+      inputEl.placeholder = "Create or join a group first...";
+    }
+  }
+}
+
+function switchChatTab(tab) {
+  activeChatTab = tab;
+  chatUnread[tab] = 0;
+  updateChatBadges();
+
+  for (const ch of ["world", "match", "group"]) {
+    document.getElementById("chat-tab-" + ch).classList.toggle("active", ch === tab);
+  }
+  updateChatHeaderAndControls();
+  renderChatFeed();
+}
+
+function renderChatFeed() {
+  const box = document.getElementById("chatFeed");
+  if (!box) return;
+  box.innerHTML = "";
+
+  for (const m of chatHistory[activeChatTab]) {
+    const row = document.createElement("div");
+    if (m.sys) {
+      row.className = "chat-msg sys";
+      row.textContent = m.text;
+    } else {
+      row.className = "chat-msg" + (m.mine ? " mine" : "");
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "chat-sender";
+      nameSpan.textContent = m.mine ? `${playerName} (You)` : m.name;
+
+      const eloSpan = document.createElement("span");
+      eloSpan.className = "chat-elo";
+      eloSpan.textContent = `[${m.elo || 1200}]`;
+
+      const textSpan = document.createElement("span");
+      textSpan.textContent = m.text;
+
+      row.appendChild(nameSpan);
+      row.appendChild(eloSpan);
+      row.appendChild(textSpan);
+    }
+    box.appendChild(row);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function subscribeGroupTopic(code, announceJoin = true) {
+  if (!code || !mqttClient || !mqttClient.connected) return;
+  const topic = GROUP_CHAT_PREFIX + code;
+  mqttClient.subscribe(topic, () => {
+    if (announceJoin) {
+      mqttClient.publish(topic, JSON.stringify({
+        type: "group_sys",
+        sender: myClientId,
+        text: `${playerName} joined Group #${code}.`
+      }));
+    }
+  });
+}
+
+function createGroupChat() {
+  const newCode = String(Math.floor(1000 + Math.random() * 9000));
+  if (activeGroupCode && mqttClient && mqttClient.connected) {
+    mqttClient.unsubscribe(GROUP_CHAT_PREFIX + activeGroupCode);
+  }
+  activeGroupCode = newCode;
+  localStorage.setItem("bh_group_code", newCode);
+  chatHistory.group = [
+    { sys: true, text: `Group #${newCode} created! Share code ${newCode} with friends.` }
+  ];
+  updateChatHeaderAndControls();
+  renderChatFeed();
+  connectGlobalRelay(() => subscribeGroupTopic(newCode, false));
+}
+
+function joinGroupChat() {
+  const inp = document.getElementById("groupCodeInput");
+  const code = inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length < 3 || code.length > 6) {
+    appendChatMessage("group", { sys: true, text: "Enter a valid 4-digit group code to join." });
+    return;
+  }
+  if (activeGroupCode && activeGroupCode !== code && mqttClient && mqttClient.connected) {
+    mqttClient.unsubscribe(GROUP_CHAT_PREFIX + activeGroupCode);
+  }
+  activeGroupCode = code;
+  localStorage.setItem("bh_group_code", code);
+  inp.value = "";
+  chatHistory.group = [
+    { sys: true, text: `Joined Group #${code}.` }
+  ];
+  updateChatHeaderAndControls();
+  renderChatFeed();
+  connectGlobalRelay(() => subscribeGroupTopic(code, true));
+}
+
+function leaveGroupChat() {
+  if (!activeGroupCode) return;
+  const oldCode = activeGroupCode;
+  if (mqttClient && mqttClient.connected) {
+    const topic = GROUP_CHAT_PREFIX + oldCode;
+    mqttClient.publish(topic, JSON.stringify({
+      type: "group_sys",
+      sender: myClientId,
+      text: `${playerName} left the group.`
+    }));
+    mqttClient.unsubscribe(topic);
+  }
+  activeGroupCode = "";
+  localStorage.removeItem("bh_group_code");
+  chatHistory.group = [
+    { sys: true, text: `Left Group #${oldCode}. Create or join another group anytime.` }
+  ];
+  updateChatHeaderAndControls();
+  renderChatFeed();
+}
+
+function sendChatMessage() {
+  const inp = document.getElementById("chatInput");
+  const raw = inp.value.trim();
+  if (!raw) return;
+
+  const now = Date.now();
+  if (now - lastChatSendTs < 450) return;
+  lastChatSendTs = now;
+
+  const text = raw.slice(0, 160);
+  inp.value = "";
+
+  if (activeChatTab === "world") {
+    appendChatMessage("world", { mine: true, name: playerName, elo: playerElo, text });
+    connectGlobalRelay(() => {
+      mqttClient.publish(WORLD_CHAT_TOPIC, JSON.stringify({
+        type: "world_chat",
+        sender: myClientId,
+        name: playerName,
+        elo: playerElo,
+        text
+      }));
+    });
+  } else if (activeChatTab === "match") {
+    if ((mode !== "host" && mode !== "guest") || !roomTopic) {
+      appendChatMessage("match", { sys: true, text: "You're playing a bot — start an online match to chat with an opponent!" });
+      return;
+    }
+    appendChatMessage("match", { mine: true, name: playerName, elo: playerElo, text });
+    sendRoomMsg({
+      type: "match_chat",
+      name: playerName,
+      elo: playerElo,
+      text
+    });
+  } else if (activeChatTab === "group") {
+    if (!activeGroupCode) {
+      appendChatMessage("group", { sys: true, text: "Click 'New Group' or enter a code to join a group first!" });
+      return;
+    }
+    appendChatMessage("group", { mine: true, name: playerName, elo: playerElo, text });
+    connectGlobalRelay(() => {
+      mqttClient.publish(GROUP_CHAT_PREFIX + activeGroupCode, JSON.stringify({
+        type: "group_chat",
+        sender: myClientId,
+        name: playerName,
+        elo: playerElo,
+        text
+      }));
+    });
+  }
+}
+
+updateChatHeaderAndControls();
+renderChatFeed();
+
+// ==========================================
+// 5. STOCKFISH WEB WORKER + PICO CALLBACKS
 // ==========================================
 let sfWorker = null;
 let sfReady = false;
@@ -1408,7 +1856,7 @@ setInterval(() => {
 }, 2000);
 
 // ==========================================
-// 5. CRISP VECTOR SVG CHESS PIECES
+// 6. CRISP VECTOR SVG CHESS PIECES
 // ==========================================
 function getPieceSVG(color, type, cls = "piece-svg") {
   const fill = color === "w" ? "#ffffff" : "#1e293b";
@@ -1427,7 +1875,7 @@ function getPieceSVG(color, type, cls = "piece-svg") {
 }
 
 // ==========================================
-// 6. GAME STATE & TOP TAB SWITCHER
+// 7. GAME STATE & TOP TAB SWITCHER
 // ==========================================
 let currentMatchId = 0;
 let selectedGame = "chess";
@@ -1468,7 +1916,7 @@ function selectGame(g) {
 }
 
 // ==========================================
-// 7. INITIALIZE & CLOCK MANAGEMENT
+// 8. INITIALIZE & CLOCK MANAGEMENT
 // ==========================================
 function initMatch(gType, tSec, oppName, oppElo, side, botTitleOverride = null, botEloOverride = null) {
   currentMatchId++;
@@ -1518,6 +1966,7 @@ function initMatch(gType, tSec, oppName, oppElo, side, botTitleOverride = null, 
   document.getElementById("btnResign").disabled = (mode === "spectate");
   document.getElementById("btnRematch").disabled = false;
 
+  updateChatHeaderAndControls();
   startClockLoop();
   renderAll();
 }
@@ -1560,7 +2009,7 @@ function finishMatch(winSide, reason) {
 }
 
 // ==========================================
-// 8. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
+// 9. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
 // ==========================================
 const BROKERS = [
   "wss://mqtt.eclipseprojects.io:443/mqtt",
@@ -1654,8 +2103,12 @@ function connectGlobalRelay(onReady = null, brokerIdx = 0) {
     setNetStatus("Connected", true);
     client.subscribe(PRESENCE_TOPIC);
     client.subscribe(LB_PLAYER_PREFIX + "+");
+    client.subscribe(WORLD_CHAT_TOPIC);
     client.subscribe(PICO_STATUS_TOPIC);
     client.subscribe(PICO_RES_TOPIC);
+    if (activeGroupCode) {
+      subscribeGroupTopic(activeGroupCode, false);
+    }
     sendHeartbeat();
     publishLeaderboardRecord();
     client.on("message", handleIncomingPacket);
@@ -1681,6 +2134,7 @@ function clearMatchmakingState() {
   }
   lobbyTopic = "";
   roomTopic = "";
+  updateChatHeaderAndControls();
 }
 
 function sendRoomMsg(obj) {
@@ -1693,7 +2147,7 @@ saveMyProfileLocally();
 connectGlobalRelay();
 
 // ==========================================
-// 9. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
+// 10. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
 // ==========================================
 function getBotMeta(val) {
   if (val === "pico") return { name: "Pico 2 W Bot", elo: 1150 };
@@ -1867,6 +2321,32 @@ function handleIncomingPacket(topic, payloadBuf) {
 
   if (msg.sender === myClientId) return;
 
+  // Worldwide Chat Incoming
+  if (topic === WORLD_CHAT_TOPIC && msg.type === "world_chat" && msg.text) {
+    appendChatMessage("world", {
+      mine: false,
+      name: String(msg.name || "Player").slice(0, 16),
+      elo: msg.elo || 1200,
+      text: String(msg.text).slice(0, 160)
+    }, true);
+    return;
+  }
+
+  // Group Chat Incoming
+  if (activeGroupCode && topic === GROUP_CHAT_PREFIX + activeGroupCode) {
+    if (msg.type === "group_chat" && msg.text) {
+      appendChatMessage("group", {
+        mine: false,
+        name: String(msg.name || "Friend").slice(0, 16),
+        elo: msg.elo || 1200,
+        text: String(msg.text).slice(0, 160)
+      }, true);
+    } else if (msg.type === "group_sys" && msg.text) {
+      appendChatMessage("group", { sys: true, text: String(msg.text).slice(0, 120) });
+    }
+    return;
+  }
+
   if (topic === lobbyTopic && searching) {
     const g = selectedGame;
     const t = parseInt(document.getElementById("timeSelect").value, 10);
@@ -1883,6 +2363,7 @@ function handleIncomingPacket(topic, payloadBuf) {
 
       mqttClient.subscribe(roomTopic, () => {
         initMatch(g, t, msg.playerName || "Opponent", msg.playerElo || 1200, 1);
+        appendChatMessage("match", { sys: true, text: `Matched vs ${msg.playerName || "Opponent"}!` });
         mqttClient.publish(lobbyTopic, JSON.stringify({
           type: "matched",
           sender: myClientId,
@@ -1901,15 +2382,27 @@ function handleIncomingPacket(topic, payloadBuf) {
       mode = "guest";
       mqttClient.subscribe(roomTopic, () => {
         applySync(msg.payload);
+        appendChatMessage("match", { sys: true, text: `Matched vs ${msg.payload.hostName || "Opponent"}!` });
       });
     }
     return;
   }
 
   if (topic === roomTopic) {
+    if (msg.type === "match_chat" && msg.text) {
+      appendChatMessage("match", {
+        mine: false,
+        name: String(msg.name || opponentName || "Opponent").slice(0, 16),
+        elo: msg.elo || opponentEloVal || 1200,
+        text: String(msg.text).slice(0, 160)
+      }, true);
+      return;
+    }
+
     if (mode === "host") {
       if (msg.type === "hello") {
         initMatch(gameType, baseTime, msg.playerName || "Friend", msg.playerElo || 1200, 1);
+        appendChatMessage("match", { sys: true, text: `${msg.playerName || "Friend"} joined the room!` });
         sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
       } else if (msg.type === "move") {
         executeMove(msg.move, 2, true);
@@ -2004,13 +2497,14 @@ function applySync(p) {
   document.getElementById("btnResign").disabled = false;
   document.getElementById("btnRematch").disabled = false;
 
+  updateChatHeaderAndControls();
   if (moveLog.length > prevLen && winner === 0) playSound("move");
   startClockLoop();
   renderAll();
 }
 
 // ==========================================
-// 10. MOVE EXECUTION & RULES (CHESS / CHK / C4)
+// 11. MOVE EXECUTION & RULES (CHESS / CHK / C4)
 // ==========================================
 function requestMove(mv) {
   if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
@@ -2082,7 +2576,7 @@ function executeMove(mv, side, triggerNextBot) {
 }
 
 // ==========================================
-// 11. PICO WIFI BOT + STOCKFISH + MINIMAX
+// 12. PICO WIFI BOT + STOCKFISH + MINIMAX
 // ==========================================
 function askPicoForMove(botSide, reqMatchId) {
   if (!mqttClient || !mqttClient.connected) {
@@ -2297,7 +2791,7 @@ function checkC4Win(b, r, c, side) {
 }
 
 // ==========================================
-// 12. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
+// 13. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
 // ==========================================
 function resignGame() {
   if (winner !== 0 || mode === "spectate") return;
@@ -2329,7 +2823,7 @@ function requestRematch() {
 }
 
 // ==========================================
-// 13. RENDER BOARD, CAPTURED PIECES & UI
+// 14. RENDER BOARD, CAPTURED PIECES & UI
 // ==========================================
 function setBanner(msg) {
   document.getElementById("statusBanner").textContent = msg;
