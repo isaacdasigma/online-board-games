@@ -20,6 +20,7 @@
       --sq-dark: #4f6d9a;
       --sq-last: rgba(56, 189, 248, 0.42);
       --sq-sel: rgba(129, 140, 248, 0.65);
+      --c4-frame: #262b5c;
     }
     * { box-sizing: border-box; }
     body {
@@ -47,7 +48,7 @@
       z-index: 20;
     }
     .nav-inner {
-      max-width: 1080px;
+      max-width: 1120px;
       width: 100%;
       display: flex;
       align-items: center;
@@ -106,6 +107,14 @@
     }
     .pill.online { background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399; }
     .pill.pico-on { background: rgba(56, 189, 248, 0.15); border-color: #38bdf8; color: #7dd3fc; }
+    .pill.music-btn { cursor: pointer; transition: 0.15s; font-family: inherit; }
+    .pill.music-btn:hover { border-color: #c084fc; color: #e9d5ff; }
+    .pill.music-on {
+      background: rgba(168, 85, 247, 0.2);
+      border-color: #c084fc;
+      color: #f3e8ff;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+    }
     .pill.profile { color: #f8fafc; border-color: #334155; }
     .live-dot {
       width: 7px; height: 7px; border-radius: 50%;
@@ -126,11 +135,11 @@
 
     /* MAIN ARENA LAYOUT */
     .arena {
-      max-width: 1080px;
+      max-width: 1120px;
       width: 100%;
       padding: 20px 16px;
       display: grid;
-      grid-template-columns: minmax(300px, 500px) minmax(300px, 400px);
+      grid-template-columns: minmax(300px, 500px) minmax(300px, 405px);
       gap: 24px;
       justify-content: center;
       align-items: start;
@@ -220,6 +229,7 @@
       min-width: 0;
       min-height: 0;
       overflow: hidden;
+      transition: background-color 0.2s;
     }
     .sq.light { background: var(--sq-light); }
     .sq.dark { background: var(--sq-dark); }
@@ -232,14 +242,14 @@
 
     .dot {
       width: 28%; height: 28%; border-radius: 50%;
-      background: rgba(15, 23, 42, 0.25); pointer-events: none; z-index: 2;
+      background: rgba(15, 23, 42, 0.28); pointer-events: none; z-index: 2;
     }
     .ring {
       position: absolute; inset: 8%; border-radius: 50%;
-      border: 4px solid rgba(15, 23, 42, 0.28); pointer-events: none; z-index: 2;
+      border: 4px solid rgba(15, 23, 42, 0.32); pointer-events: none; z-index: 2;
     }
     .coord {
-      position: absolute; font-size: 10px; font-weight: 800; pointer-events: none; opacity: 0.8;
+      position: absolute; font-size: 10px; font-weight: 800; pointer-events: none; opacity: 0.85;
     }
     .coord.rank { top: 2px; left: 4px; }
     .coord.file { bottom: 2px; right: 4px; }
@@ -265,9 +275,10 @@
     .chk-disc.p2 { background: #fbbf24; color: #1e293b; border: 3px solid #d97706; }
 
     .c4-sq {
-      background: #262b5c; padding: 6px;
+      background: var(--c4-frame); padding: 6px;
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; min-width: 0; min-height: 0; overflow: hidden;
+      transition: background-color 0.2s;
     }
     .c4-hole { width: 100%; height: 100%; border-radius: 50%; background: var(--bg); box-shadow: inset 0 3px 6px rgba(0,0,0,0.7); }
     .c4-hole.p1 { background: #f43f5e; }
@@ -343,7 +354,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      height: 115px;
+      height: 110px;
       overflow-y: auto;
       padding: 8px;
       font-size: 13px;
@@ -359,7 +370,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      max-height: 165px;
+      max-height: 160px;
       overflow-y: auto;
       padding: 6px;
       display: flex;
@@ -449,6 +460,7 @@
     </div>
 
     <div class="pills">
+      <button class="pill music-btn" id="musicToggleBtn" onclick="toggleLobbyMusic()">Music: Off</button>
       <span class="pill online"><span class="live-dot"></span><span id="onlineCountText">1 Online</span></span>
       <span class="pill" id="picoStatusBadge">Pico: Offline</span>
       <span class="pill" id="netBadge">Connecting...</span>
@@ -504,7 +516,7 @@
   <div class="dock">
     <div class="panel">
       <div class="panel-label">
-        <span>Bot & Match Setup</span>
+        <span>Bot & Board Setup</span>
         <span id="engineBadge" style="color:#38bdf8;">Engine: Loading...</span>
       </div>
 
@@ -537,14 +549,29 @@
       </div>
 
       <div class="row-2">
-        <select id="timeSelect">
-          <option value="180">3 min Blitz</option>
-          <option value="60">1 min Bullet</option>
-          <option value="600">10 min Rapid</option>
-          <option value="0">Untimed</option>
-        </select>
-        <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
+        <div>
+          <span class="field-lbl">Board Theme</span>
+          <select id="boardThemeSelect" onchange="applyBoardTheme(this.value)">
+            <option value="slate">Classic Slate</option>
+            <option value="darkworld">Dark World (Deltarune)</option>
+            <option value="emerald">Tournament Emerald</option>
+            <option value="walnut">Walnut Wood</option>
+            <option value="obsidian">Obsidian Midnight</option>
+            <option value="crimson">Scarlet Crimson</option>
+          </select>
+        </div>
+        <div>
+          <span class="field-lbl">Time Control</span>
+          <select id="timeSelect">
+            <option value="180">3 min Blitz</option>
+            <option value="60">1 min Bullet</option>
+            <option value="600">10 min Rapid</option>
+            <option value="0">Untimed</option>
+          </select>
+        </div>
       </div>
+
+      <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
 
       <div class="row-2">
         <button class="btn" onclick="hostFriendRoom()">Create Room</button>
@@ -593,7 +620,223 @@
 
 <script>
 // ==========================================
-// 1. PERSISTENT PROFILE, ONE-TIME NICKNAME & ELO
+// 1. CUSTOM BOARD THEMES
+// ==========================================
+const BOARD_THEMES = {
+  slate: {
+    light: "#e2e8f0",
+    dark: "#4f6d9a",
+    last: "rgba(56, 189, 248, 0.42)",
+    sel: "rgba(129, 140, 248, 0.65)",
+    c4: "#262b5c"
+  },
+  darkworld: {
+    light: "#ddd6fe",
+    dark: "#3b0764",
+    last: "rgba(236, 72, 153, 0.45)",
+    sel: "rgba(34, 211, 238, 0.65)",
+    c4: "#2e1065"
+  },
+  emerald: {
+    light: "#eeeed2",
+    dark: "#769656",
+    last: "rgba(246, 246, 105, 0.55)",
+    sel: "rgba(186, 202, 68, 0.72)",
+    c4: "#14532d"
+  },
+  walnut: {
+    light: "#f0d9b5",
+    dark: "#b58863",
+    last: "rgba(205, 210, 106, 0.55)",
+    sel: "rgba(245, 158, 11, 0.55)",
+    c4: "#5c3a21"
+  },
+  obsidian: {
+    light: "#64748b",
+    dark: "#1e293b",
+    last: "rgba(56, 189, 248, 0.38)",
+    sel: "rgba(99, 102, 241, 0.6)",
+    c4: "#0f172a"
+  },
+  crimson: {
+    light: "#fde8e8",
+    dark: "#991b1b",
+    last: "rgba(251, 191, 36, 0.45)",
+    sel: "rgba(244, 63, 94, 0.65)",
+    c4: "#450a0a"
+  }
+};
+
+function applyBoardTheme(themeKey) {
+  const t = BOARD_THEMES[themeKey] || BOARD_THEMES.slate;
+  const root = document.documentElement.style;
+  root.setProperty("--sq-light", t.light);
+  root.setProperty("--sq-dark", t.dark);
+  root.setProperty("--sq-last", t.last);
+  root.setProperty("--sq-sel", t.sel);
+  root.setProperty("--c4-frame", t.c4);
+  localStorage.setItem("bh_board_theme", themeKey);
+  const sel = document.getElementById("boardThemeSelect");
+  if (sel) sel.value = themeKey;
+}
+
+applyBoardTheme(localStorage.getItem("bh_board_theme") || "slate");
+
+// ==========================================
+// 2. SOUND ENGINE & DELTARUNE LOBBY SYNTH
+// ==========================================
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(type) {
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+
+  if (type === "move") {
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.exponentialRampToValueAtTime(65, now + 0.08);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    osc.start(now); osc.stop(now + 0.08);
+  } else if (type === "capture") {
+    osc.type = "square";
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(55, now + 0.11);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
+    osc.start(now); osc.stop(now + 0.11);
+  } else if (type === "check") {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.setValueAtTime(390, now + 0.09);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    osc.start(now); osc.stop(now + 0.2);
+  } else if (type === "end") {
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(330, now);
+    osc.frequency.setValueAtTime(440, now + 0.12);
+    osc.frequency.setValueAtTime(554, now + 0.24);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+    osc.start(now); osc.stop(now + 0.45);
+  }
+}
+
+// 8-Bar Deltarune Castle Town / Hip Shop Inspired Loop (BbMaj7 -> Am7 -> Dm7 -> Gm7 -> C7)
+let musicPlaying = false;
+let musicTimer = null;
+let musicStep = 0;
+
+const DR_LEAD = [
+  77,  0, 74, 77, 81,  0, 79, 77, // Bar 1: BbMaj7
+  76,  0, 72, 76, 79,  0, 77, 76, // Bar 2: Am7
+  74,  0, 69, 72, 74, 76, 77,  0, // Bar 3: Dm7
+  72,  0, 74,  0, 76,  0, 77, 79, // Bar 4: Csus4
+  81,  0, 79, 77, 74,  0, 77,  0, // Bar 5: BbMaj7
+  79,  0, 76, 72, 75,  0, 78,  0, // Bar 6: Am7 -> D7b9
+  79,  0, 77, 74, 70,  0, 72, 74, // Bar 7: Gm7
+  77,  0, 76,  0, 72,  0,  0,  0  // Bar 8: C7 turnaround
+];
+
+const DR_ARP = [
+  58, 62, 65, 69, 70, 69, 65, 62,
+  57, 60, 64, 67, 69, 67, 64, 60,
+  50, 53, 57, 60, 62, 60, 57, 53,
+  55, 60, 65, 69, 67, 65, 60, 55,
+  58, 62, 65, 69, 70, 69, 65, 62,
+  57, 60, 64, 67, 66, 63, 60, 57,
+  55, 58, 62, 65, 67, 65, 62, 58,
+  53, 58, 60, 65, 52, 58, 60, 64
+];
+
+const DR_BASS = [
+  46,  0, 53,  0, 46,  0, 53,  0,
+  45,  0, 52,  0, 45,  0, 52,  0,
+  38,  0, 45,  0, 38,  0, 45,  0,
+  48,  0, 43,  0, 48,  0, 55,  0,
+  46,  0, 53,  0, 46,  0, 53,  0,
+  45,  0, 52,  0, 50,  0, 45,  0,
+  43,  0, 50,  0, 43,  0, 50,  0,
+  48,  0, 55,  0, 48,  0, 52,  0
+];
+
+function midiToFreq(m) {
+  return 440 * Math.pow(2, (m - 69) / 12);
+}
+
+function triggerSynthVoice(midi, waveType, peakGain, duration) {
+  if (!midi || !musicPlaying) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = waveType;
+  osc.frequency.setValueAtTime(midiToFreq(midi), now);
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(peakGain, now + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+}
+
+function stepLobbyMusic() {
+  if (!musicPlaying) return;
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  const idx = musicStep % 64;
+  triggerSynthVoice(DR_LEAD[idx], "triangle", 0.075, 0.48);
+  triggerSynthVoice(DR_ARP[idx], "square", 0.022, 0.22);
+  triggerSynthVoice(DR_BASS[idx], "sine", 0.095, 0.42);
+  musicStep++;
+}
+
+function updateMusicButtonUI() {
+  const btn = document.getElementById("musicToggleBtn");
+  if (!btn) return;
+  btn.textContent = musicPlaying ? "Music: On" : "Music: Off";
+  btn.className = "pill music-btn" + (musicPlaying ? " music-on" : "");
+}
+
+function toggleLobbyMusic() {
+  musicPlaying = !musicPlaying;
+  localStorage.setItem("bh_music_pref", musicPlaying ? "on" : "off");
+  updateMusicButtonUI();
+
+  if (musicPlaying) {
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (musicTimer) clearInterval(musicTimer);
+    stepLobbyMusic();
+    musicTimer = setInterval(stepLobbyMusic, 290); // ~103 BPM eighth-note groove
+  } else if (musicTimer) {
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+}
+
+// Resume music on first click if user had it enabled previously
+if (localStorage.getItem("bh_music_pref") === "on") {
+  musicPlaying = true;
+  updateMusicButtonUI();
+  const unlockOnce = () => {
+    if (musicPlaying && !musicTimer) {
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      stepLobbyMusic();
+      musicTimer = setInterval(stepLobbyMusic, 290);
+    }
+    window.removeEventListener("pointerdown", unlockOnce);
+  };
+  window.addEventListener("pointerdown", unlockOnce);
+}
+
+// ==========================================
+// 3. PERSISTENT PROFILE, ONE-TIME NICKNAME & ELO
 // ==========================================
 let deviceId = localStorage.getItem("bh_device_id");
 if (!deviceId) {
@@ -616,7 +859,6 @@ let statsD = parseInt(localStorage.getItem("bh_draws") || "0", 10);
 
 const myClientId = deviceId + "_" + Math.random().toString(36).slice(2, 6);
 
-// Leaderboard Map (keyed by deviceId)
 let leaderboardMap = new Map();
 try {
   const cached = JSON.parse(localStorage.getItem("bh_lb_cache") || "[]");
@@ -755,51 +997,7 @@ function applyRatedResult(winSide) {
 }
 
 // ==========================================
-// 2. SOUND ENGINE
-// ==========================================
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSound(type) {
-  if (audioCtx.state === "suspended") audioCtx.resume();
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  const now = audioCtx.currentTime;
-
-  if (type === "move") {
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(160, now);
-    osc.frequency.exponentialRampToValueAtTime(65, now + 0.08);
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-    osc.start(now); osc.stop(now + 0.08);
-  } else if (type === "capture") {
-    osc.type = "square";
-    osc.frequency.setValueAtTime(240, now);
-    osc.frequency.exponentialRampToValueAtTime(55, now + 0.11);
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
-    osc.start(now); osc.stop(now + 0.11);
-  } else if (type === "check") {
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(520, now);
-    osc.frequency.setValueAtTime(390, now + 0.09);
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-    osc.start(now); osc.stop(now + 0.2);
-  } else if (type === "end") {
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(330, now);
-    osc.frequency.setValueAtTime(440, now + 0.12);
-    osc.frequency.setValueAtTime(554, now + 0.24);
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
-    osc.start(now); osc.stop(now + 0.45);
-  }
-}
-
-// ==========================================
-// 3. STOCKFISH WEB WORKER + PICO CALLBACKS
+// 4. STOCKFISH WEB WORKER + PICO CALLBACKS
 // ==========================================
 let sfWorker = null;
 let sfReady = false;
@@ -856,7 +1054,7 @@ setInterval(() => {
 }, 2000);
 
 // ==========================================
-// 4. CRISP VECTOR SVG CHESS PIECES
+// 5. CRISP VECTOR SVG CHESS PIECES
 // ==========================================
 function getPieceSVG(color, type, cls = "piece-svg") {
   const fill = color === "w" ? "#ffffff" : "#1e293b";
@@ -875,7 +1073,7 @@ function getPieceSVG(color, type, cls = "piece-svg") {
 }
 
 // ==========================================
-// 5. GAME STATE & TOP TAB SWITCHER
+// 6. GAME STATE & TOP TAB SWITCHER
 // ==========================================
 let currentMatchId = 0;
 let selectedGame = "chess";
@@ -916,7 +1114,7 @@ function selectGame(g) {
 }
 
 // ==========================================
-// 6. INITIALIZE & CLOCK MANAGEMENT
+// 7. INITIALIZE & CLOCK MANAGEMENT
 // ==========================================
 function initMatch(gType, tSec, oppName, oppElo, side, botTitleOverride = null, botEloOverride = null) {
   currentMatchId++;
@@ -1008,7 +1206,7 @@ function finishMatch(winSide, reason) {
 }
 
 // ==========================================
-// 7. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
+// 8. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
 // ==========================================
 const BROKERS = [
   "wss://mqtt.eclipseprojects.io:443/mqtt",
@@ -1141,7 +1339,7 @@ saveMyProfileLocally();
 connectGlobalRelay();
 
 // ==========================================
-// 8. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
+// 9. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
 // ==========================================
 function getBotMeta(val) {
   if (val === "pico") return { name: "Pico 2 W Bot", elo: 1150 };
@@ -1261,10 +1459,9 @@ function handleIncomingPacket(topic, payloadBuf) {
   }
   if (!msg) return;
 
-  // Retained & Live Leaderboard Entries
   if (topic.startsWith(LB_PLAYER_PREFIX)) {
     if (msg.id && msg.name) {
-      if (msg.id === deviceId) return; // Keep local authoritative profile for self
+      if (msg.id === deviceId) return;
       const prev = leaderboardMap.get(msg.id);
       if (!prev || (msg.updated || 0) >= (prev.updated || 0)) {
         leaderboardMap.set(msg.id, msg);
@@ -1275,7 +1472,6 @@ function handleIncomingPacket(topic, payloadBuf) {
     return;
   }
 
-  // Pico 2 W Status & Move Responses
   if (topic === PICO_STATUS_TOPIC) {
     lastPicoSeen = Date.now();
     return;
@@ -1302,7 +1498,6 @@ function handleIncomingPacket(topic, payloadBuf) {
     return;
   }
 
-  // Presence Heartbeat
   if (topic === PRESENCE_TOPIC) {
     if (msg.type === "hb" && msg.id) {
       const isNew = !onlinePeers.has(msg.id);
@@ -1318,7 +1513,6 @@ function handleIncomingPacket(topic, payloadBuf) {
 
   if (msg.sender === myClientId) return;
 
-  // Lobby Matchmaking
   if (topic === lobbyTopic && searching) {
     const g = selectedGame;
     const t = parseInt(document.getElementById("timeSelect").value, 10);
@@ -1358,7 +1552,6 @@ function handleIncomingPacket(topic, payloadBuf) {
     return;
   }
 
-  // Room Gameplay
   if (topic === roomTopic) {
     if (mode === "host") {
       if (msg.type === "hello") {
@@ -1463,7 +1656,7 @@ function applySync(p) {
 }
 
 // ==========================================
-// 9. MOVE EXECUTION & RULES (CHESS / CHK / C4)
+// 10. MOVE EXECUTION & RULES (CHESS / CHK / C4)
 // ==========================================
 function requestMove(mv) {
   if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
@@ -1535,7 +1728,7 @@ function executeMove(mv, side, triggerNextBot) {
 }
 
 // ==========================================
-// 10. PICO WIFI BOT + STOCKFISH + MINIMAX
+// 11. PICO WIFI BOT + STOCKFISH + MINIMAX
 // ==========================================
 function askPicoForMove(botSide, reqMatchId) {
   if (!mqttClient || !mqttClient.connected) {
@@ -1750,7 +1943,7 @@ function checkC4Win(b, r, c, side) {
 }
 
 // ==========================================
-// 11. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
+// 12. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
 // ==========================================
 function resignGame() {
   if (winner !== 0 || mode === "spectate") return;
@@ -1782,7 +1975,7 @@ function requestRematch() {
 }
 
 // ==========================================
-// 12. RENDER BOARD, CAPTURED PIECES & UI
+// 13. RENDER BOARD, CAPTURED PIECES & UI
 // ==========================================
 function setBanner(msg) {
   document.getElementById("statusBanner").textContent = msg;
