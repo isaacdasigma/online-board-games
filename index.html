@@ -47,7 +47,7 @@
       z-index: 20;
     }
     .nav-inner {
-      max-width: 1060px;
+      max-width: 1080px;
       width: 100%;
       display: flex;
       align-items: center;
@@ -106,18 +106,31 @@
     }
     .pill.online { background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399; }
     .pill.pico-on { background: rgba(56, 189, 248, 0.15); border-color: #38bdf8; color: #7dd3fc; }
+    .pill.profile { color: #f8fafc; border-color: #334155; }
     .live-dot {
       width: 7px; height: 7px; border-radius: 50%;
       background: #10b981; box-shadow: 0 0 6px #10b981;
     }
+    .set-name-btn {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .set-name-btn:hover { filter: brightness(1.15); }
 
     /* MAIN ARENA LAYOUT */
     .arena {
-      max-width: 1060px;
+      max-width: 1080px;
       width: 100%;
       padding: 20px 16px;
       display: grid;
-      grid-template-columns: minmax(300px, 500px) minmax(300px, 390px);
+      grid-template-columns: minmax(300px, 500px) minmax(300px, 400px);
       gap: 24px;
       justify-content: center;
       align-items: start;
@@ -144,7 +157,13 @@
       display: flex; align-items: center; justify-content: center;
       font-weight: 800; font-size: 12px; color: #38bdf8;
     }
+    .p-title-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .p-title { font-weight: 700; font-size: 14px; }
+    .elo-tag {
+      font-size: 11px; font-weight: 800; padding: 1px 6px;
+      border-radius: 5px; background: var(--bg);
+      border: 1px solid var(--border); color: #38bdf8;
+    }
     .cap-row {
       display: flex; align-items: center; flex-wrap: wrap; gap: 1px;
       font-size: 12px; font-weight: 700; color: var(--muted); min-height: 18px;
@@ -275,7 +294,7 @@
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 16px;
+      padding: 15px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -324,7 +343,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      height: 140px;
+      height: 115px;
       overflow-y: auto;
       padding: 8px;
       font-size: 13px;
@@ -334,6 +353,84 @@
     .m-row:nth-child(even) { background: rgba(255,255,255,0.03); }
     .m-idx { color: var(--muted); }
     .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+    /* LEADERBOARD */
+    .lb-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      max-height: 165px;
+      overflow-y: auto;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .lb-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .lb-row.me {
+      background: rgba(99, 102, 241, 0.16);
+      border: 1px solid rgba(99, 102, 241, 0.45);
+    }
+    .lb-rank { font-weight: 800; color: var(--muted); }
+    .lb-rank.top1 { color: #fbbf24; }
+    .lb-rank.top2 { color: #e2e8f0; }
+    .lb-rank.top3 { color: #d97706; }
+    .lb-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lb-wld { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
+    .lb-elo {
+      font-weight: 800;
+      color: #38bdf8;
+      font-family: ui-monospace, monospace;
+      background: var(--card);
+      padding: 2px 6px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+    }
+
+    /* ONE-TIME NICKNAME MODAL */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 10, 18, 0.82);
+      backdrop-filter: blur(4px);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      max-width: 370px;
+      width: 100%;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6);
+    }
+    .modal-title { font-size: 17px; font-weight: 800; }
+    .modal-desc { font-size: 13px; color: var(--muted); line-height: 1.45; }
+    .modal-warn {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      padding: 8px 10px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
@@ -355,7 +452,10 @@
       <span class="pill online"><span class="live-dot"></span><span id="onlineCountText">1 Online</span></span>
       <span class="pill" id="picoStatusBadge">Pico: Offline</span>
       <span class="pill" id="netBadge">Connecting...</span>
-      <span class="pill" id="guestBadge">guest_0000</span>
+      <span class="pill profile" id="profileBadge">
+        <span id="headerNameText">guest_0000 (1200)</span>
+        <button class="set-name-btn" id="headerSetNameBtn" onclick="openNicknameModal()">Set Name</button>
+      </span>
     </div>
   </div>
 </header>
@@ -367,7 +467,10 @@
       <div class="p-meta">
         <div class="badge-side" id="topAvatar">P2</div>
         <div>
-          <div class="p-title" id="topName">Opponent</div>
+          <div class="p-title-row">
+            <span class="p-title" id="topName">Opponent</span>
+            <span class="elo-tag" id="topElo">1200</span>
+          </div>
           <div class="cap-row" id="topCap"></div>
         </div>
       </div>
@@ -385,7 +488,11 @@
       <div class="p-meta">
         <div class="badge-side" id="botAvatar">P1</div>
         <div>
-          <div class="p-title" id="botName">You</div>
+          <div class="p-title-row">
+            <span class="p-title" id="botName">You</span>
+            <span class="elo-tag" id="botElo">1200</span>
+            <button class="set-name-btn" id="stripSetNameBtn" onclick="openNicknameModal()">Set Name</button>
+          </div>
           <div class="cap-row" id="botCap"></div>
         </div>
       </div>
@@ -393,7 +500,7 @@
     </div>
   </div>
 
-  <!-- RIGHT: MATCHMAKING & BOT CONFIG -->
+  <!-- RIGHT: MATCHMAKING, BOT CONFIG & LEADERBOARD -->
   <div class="dock">
     <div class="panel">
       <div class="panel-label">
@@ -405,21 +512,21 @@
         <div>
           <span class="field-lbl">Bot 1 (Opponent / White)</span>
           <select id="bot1Select">
-            <option value="1">Casual (~1000)</option>
-            <option value="2">Club (~1600)</option>
-            <option value="3" selected>Master (~2200)</option>
-            <option value="4">Stockfish GM</option>
-            <option value="pico">Pico 2 W (Wi-Fi)</option>
+            <option value="1">Casual (1000)</option>
+            <option value="2">Club (1400)</option>
+            <option value="3" selected>Master (1800)</option>
+            <option value="4">Stockfish GM (2400)</option>
+            <option value="pico">Pico 2 W (1150)</option>
           </select>
         </div>
         <div>
           <span class="field-lbl">Bot 2 (Spectate Black)</span>
           <select id="bot2Select">
-            <option value="1" selected>Casual (~1000)</option>
-            <option value="2">Club (~1600)</option>
-            <option value="3">Master (~2200)</option>
-            <option value="4">Stockfish GM</option>
-            <option value="pico">Pico 2 W (Wi-Fi)</option>
+            <option value="1" selected>Casual (1000)</option>
+            <option value="2">Club (1400)</option>
+            <option value="3">Master (1800)</option>
+            <option value="4">Stockfish GM (2400)</option>
+            <option value="pico">Pico 2 W (1150)</option>
           </select>
         </div>
       </div>
@@ -459,21 +566,197 @@
         <button class="btn" id="btnRematch" onclick="requestRematch()" disabled>Rematch</button>
       </div>
     </div>
+
+    <div class="panel">
+      <div class="panel-label">
+        <span>Live Leaderboard</span>
+        <span id="lbCountLabel" style="color:#38bdf8;">Top Players</span>
+      </div>
+      <div class="lb-list" id="leaderboardList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ONE-TIME NICKNAME MODAL -->
+<div class="modal-backdrop" id="nicknameModal">
+  <div class="modal-card">
+    <div class="modal-title">Set Permanent Nickname</div>
+    <div class="modal-desc">Pick your custom player name for matches and the live leaderboard (2–14 letters or numbers).</div>
+    <div class="modal-warn">Warning: You can only set your nickname ONCE on this device.</div>
+    <input id="nicknameInput" placeholder="Enter nickname..." maxlength="14" onkeydown="if(event.key==='Enter') confirmNickname()" />
+    <div class="row-2">
+      <button class="btn" onclick="closeNicknameModal()">Cancel</button>
+      <button class="btn cta" onclick="confirmNickname()">Lock In Name</button>
+    </div>
   </div>
 </div>
 
 <script>
 // ==========================================
-// 1. PERSISTENT GUEST ID & SOUND ENGINE
+// 1. PERSISTENT PROFILE, ONE-TIME NICKNAME & ELO
 // ==========================================
-let guestId = localStorage.getItem("bh_guest_id");
-if (!guestId) {
-  guestId = "guest_" + Math.floor(1000 + Math.random() * 9000);
-  localStorage.setItem("bh_guest_id", guestId);
+let deviceId = localStorage.getItem("bh_device_id");
+if (!deviceId) {
+  deviceId = "dev_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  localStorage.setItem("bh_device_id", deviceId);
 }
-document.getElementById("guestBadge").textContent = guestId;
-const myClientId = guestId + "_" + Math.random().toString(36).slice(2, 7);
 
+let defaultGuest = localStorage.getItem("bh_guest_id");
+if (!defaultGuest) {
+  defaultGuest = "guest_" + Math.floor(1000 + Math.random() * 9000);
+  localStorage.setItem("bh_guest_id", defaultGuest);
+}
+
+let playerName = localStorage.getItem("bh_player_name") || defaultGuest;
+let nameLocked = localStorage.getItem("bh_name_locked") === "true";
+let playerElo = parseInt(localStorage.getItem("bh_elo") || "1200", 10);
+let statsW = parseInt(localStorage.getItem("bh_wins") || "0", 10);
+let statsL = parseInt(localStorage.getItem("bh_losses") || "0", 10);
+let statsD = parseInt(localStorage.getItem("bh_draws") || "0", 10);
+
+const myClientId = deviceId + "_" + Math.random().toString(36).slice(2, 6);
+
+// Leaderboard Map (keyed by deviceId)
+let leaderboardMap = new Map();
+try {
+  const cached = JSON.parse(localStorage.getItem("bh_lb_cache") || "[]");
+  for (const item of cached) {
+    if (item && item.id) leaderboardMap.set(item.id, item);
+  }
+} catch (e) {}
+
+function saveMyProfileLocally() {
+  localStorage.setItem("bh_player_name", playerName);
+  localStorage.setItem("bh_name_locked", nameLocked ? "true" : "false");
+  localStorage.setItem("bh_elo", String(playerElo));
+  localStorage.setItem("bh_wins", String(statsW));
+  localStorage.setItem("bh_losses", String(statsL));
+  localStorage.setItem("bh_draws", String(statsD));
+
+  leaderboardMap.set(deviceId, {
+    id: deviceId,
+    name: playerName,
+    elo: playerElo,
+    w: statsW,
+    l: statsL,
+    d: statsD,
+    updated: Date.now()
+  });
+  saveLeaderboardCache();
+  updateProfileUI();
+  renderLeaderboard();
+}
+
+function saveLeaderboardCache() {
+  const arr = Array.from(leaderboardMap.values())
+    .sort((a, b) => b.elo - a.elo)
+    .slice(0, 30);
+  localStorage.setItem("bh_lb_cache", JSON.stringify(arr));
+}
+
+function updateProfileUI() {
+  document.getElementById("headerNameText").textContent = `${playerName} (${playerElo})`;
+  document.getElementById("headerSetNameBtn").style.display = nameLocked ? "none" : "inline-block";
+  const stripBtn = document.getElementById("stripSetNameBtn");
+  if (stripBtn) {
+    stripBtn.style.display = (nameLocked || mode === "spectate") ? "none" : "inline-block";
+  }
+  if (mode !== "spectate") {
+    bottomTitle = `${playerName} (You)`;
+    bottomEloVal = playerElo;
+  }
+}
+
+function openNicknameModal() {
+  if (nameLocked) return;
+  const modal = document.getElementById("nicknameModal");
+  const inp = document.getElementById("nicknameInput");
+  inp.value = playerName.startsWith("guest_") ? "" : playerName;
+  modal.style.display = "flex";
+  setTimeout(() => inp.focus(), 50);
+}
+
+function closeNicknameModal() {
+  document.getElementById("nicknameModal").style.display = "none";
+}
+
+function confirmNickname() {
+  if (nameLocked) {
+    closeNicknameModal();
+    return;
+  }
+  const raw = document.getElementById("nicknameInput").value.trim();
+  const clean = raw.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
+  if (clean.length < 2 || clean.length > 14) {
+    alert("Please enter a nickname between 2 and 14 characters (letters, numbers, spaces, or _).");
+    return;
+  }
+  if (!confirm(`Lock in "${clean}" permanently on this device? You can only change your nickname once.`)) {
+    return;
+  }
+  playerName = clean;
+  nameLocked = true;
+  closeNicknameModal();
+  saveMyProfileLocally();
+  publishLeaderboardRecord();
+  renderAll();
+}
+
+function renderLeaderboard() {
+  const box = document.getElementById("leaderboardList");
+  if (!box) return;
+  const entries = Array.from(leaderboardMap.values())
+    .sort((a, b) => (b.elo - a.elo) || (b.w - a.w));
+
+  document.getElementById("lbCountLabel").textContent = `${entries.length} Player${entries.length === 1 ? "" : "s"}`;
+  box.innerHTML = "";
+
+  entries.slice(0, 20).forEach((p, idx) => {
+    const isMe = (p.id === deviceId);
+    const row = document.createElement("div");
+    row.className = "lb-row" + (isMe ? " me" : "");
+    const rankCls = idx === 0 ? "top1" : idx === 1 ? "top2" : idx === 2 ? "top3" : "";
+    const safeName = String(p.name || "Player").replace(/[<>&]/g, "");
+    row.innerHTML = `
+      <span class="lb-rank ${rankCls}">#${idx + 1}</span>
+      <span class="lb-name">${safeName}${isMe ? " (You)" : ""}</span>
+      <span class="lb-wld">${p.w || 0}W-${p.l || 0}L</span>
+      <span class="lb-elo">${p.elo || 1200}</span>
+    `;
+    box.appendChild(row);
+  });
+}
+
+function applyRatedResult(winSide) {
+  if (mode === "spectate" || ratingApplied || moveLog.length < 2) return "";
+  ratingApplied = true;
+
+  const oppRating = opponentEloVal || 1200;
+  const expected = 1 / (1 + Math.pow(10, (oppRating - playerElo) / 400));
+  let actual = 0.5;
+  if (winSide === mySide) {
+    actual = 1.0;
+    statsW++;
+  } else if (winSide === 3) {
+    actual = 0.5;
+    statsD++;
+  } else {
+    actual = 0.0;
+    statsL++;
+  }
+
+  const delta = Math.round(32 * (actual - expected));
+  playerElo = Math.max(100, playerElo + delta);
+  saveMyProfileLocally();
+  publishLeaderboardRecord();
+
+  const sign = delta >= 0 ? "+" : "";
+  return ` (${sign}${delta} Elo)`;
+}
+
+// ==========================================
+// 2. SOUND ENGINE
+// ==========================================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
   if (audioCtx.state === "suspended") audioCtx.resume();
@@ -516,7 +799,7 @@ function playSound(type) {
 }
 
 // ==========================================
-// 2. STOCKFISH WEB WORKER + PICO CALLBACKS
+// 3. STOCKFISH WEB WORKER + PICO CALLBACKS
 // ==========================================
 let sfWorker = null;
 let sfReady = false;
@@ -573,7 +856,7 @@ setInterval(() => {
 }, 2000);
 
 // ==========================================
-// 3. CRISP VECTOR SVG CHESS PIECES
+// 4. CRISP VECTOR SVG CHESS PIECES
 // ==========================================
 function getPieceSVG(color, type, cls = "piece-svg") {
   const fill = color === "w" ? "#ffffff" : "#1e293b";
@@ -592,7 +875,7 @@ function getPieceSVG(color, type, cls = "piece-svg") {
 }
 
 // ==========================================
-// 4. GAME STATE & TOP TAB SWITCHER
+// 5. GAME STATE & TOP TAB SWITCHER
 // ==========================================
 let currentMatchId = 0;
 let selectedGame = "chess";
@@ -604,9 +887,13 @@ let clocks = { 1: 180, 2: 180 };
 let clockTimer = null;
 let winner = 0;
 let endReason = "";
-let bottomTitle = `${guestId} (You)`;
+let ratingDeltaText = "";
+let ratingApplied = false;
+let bottomTitle = `${playerName} (You)`;
+let bottomEloVal = playerElo;
 let opponentName = "Master Bot";
-let botConfig = { 1: "3", 2: "3" }; // Side 1 bot level, Side 2 bot level
+let opponentEloVal = 1800;
+let botConfig = { 1: "3", 2: "3" };
 let selected = null;
 let legalTargets = [];
 let lastMove = null;
@@ -629,9 +916,9 @@ function selectGame(g) {
 }
 
 // ==========================================
-// 5. INITIALIZE & CLOCK MANAGEMENT
+// 6. INITIALIZE & CLOCK MANAGEMENT
 // ==========================================
-function initMatch(gType, tSec, oppName, side, botTitleOverride = null) {
+function initMatch(gType, tSec, oppName, oppElo, side, botTitleOverride = null, botEloOverride = null) {
   currentMatchId++;
   sfCallback = null;
   pendingPicoReq = null;
@@ -644,8 +931,12 @@ function initMatch(gType, tSec, oppName, side, botTitleOverride = null) {
   clocks = { 1: tSec, 2: tSec };
   winner = 0;
   endReason = "";
+  ratingDeltaText = "";
+  ratingApplied = false;
   opponentName = oppName;
-  bottomTitle = botTitleOverride || `${guestId} (You)`;
+  opponentEloVal = oppElo || 1200;
+  bottomTitle = botTitleOverride || `${playerName} (You)`;
+  bottomEloVal = botEloOverride || playerElo;
   mySide = side;
   selected = null;
   legalTargets = [];
@@ -708,14 +999,16 @@ function formatClock(sec) {
 }
 
 function finishMatch(winSide, reason) {
+  if (winner !== 0) return;
   winner = winSide;
   endReason = reason;
+  ratingDeltaText = applyRatedResult(winSide);
   playSound("end");
   renderAll();
 }
 
 // ==========================================
-// 6. GLOBAL RELAY + PICO WIFI BRIDGE
+// 7. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
 // ==========================================
 const BROKERS = [
   "wss://mqtt.eclipseprojects.io:443/mqtt",
@@ -723,6 +1016,7 @@ const BROKERS = [
   "wss://broker.hivemq.com:8884/mqtt"
 ];
 const PRESENCE_TOPIC = "boardhub/v1/presence";
+const LB_PLAYER_PREFIX = "boardhub/v1/lb/player/";
 const PICO_REQ_TOPIC = "boardhub/v1/pico/req";
 const PICO_RES_TOPIC = "boardhub/v1/pico/res";
 const PICO_STATUS_TOPIC = "boardhub/v1/pico/status";
@@ -734,6 +1028,20 @@ let searching = false;
 let seekTimer = null;
 let onlinePeers = new Map();
 let lastPresenceReply = 0;
+
+function publishLeaderboardRecord() {
+  if (!mqttClient || !mqttClient.connected) return;
+  const record = {
+    id: deviceId,
+    name: playerName,
+    elo: playerElo,
+    w: statsW,
+    l: statsL,
+    d: statsD,
+    updated: Date.now()
+  };
+  mqttClient.publish(LB_PLAYER_PREFIX + deviceId, JSON.stringify(record), { retain: true });
+}
 
 function updateOnlineCounterUI() {
   onlinePeers.set(myClientId, Date.now());
@@ -793,9 +1101,11 @@ function connectGlobalRelay(onReady = null, brokerIdx = 0) {
     mqttClient = client;
     setNetStatus("Connected", true);
     client.subscribe(PRESENCE_TOPIC);
+    client.subscribe(LB_PLAYER_PREFIX + "+");
     client.subscribe(PICO_STATUS_TOPIC);
     client.subscribe(PICO_RES_TOPIC);
     sendHeartbeat();
+    publishLeaderboardRecord();
     client.on("message", handleIncomingPacket);
     if (onReady) onReady();
   });
@@ -827,17 +1137,18 @@ function sendRoomMsg(obj) {
   mqttClient.publish(roomTopic, JSON.stringify(obj));
 }
 
+saveMyProfileLocally();
 connectGlobalRelay();
 
 // ==========================================
-// 7. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
+// 8. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
 // ==========================================
-function getBotName(val) {
-  if (val === "pico") return "Pico 2 W Bot";
-  if (val === "1") return "Casual Bot";
-  if (val === "2") return "Club Bot";
-  if (val === "3") return "Master Bot";
-  return "Stockfish GM";
+function getBotMeta(val) {
+  if (val === "pico") return { name: "Pico 2 W Bot", elo: 1150 };
+  if (val === "1") return { name: "Casual Bot", elo: 1000 };
+  if (val === "2") return { name: "Club Bot", elo: 1400 };
+  if (val === "3") return { name: "Master Bot", elo: 1800 };
+  return { name: "Stockfish GM", elo: 2400 };
 }
 
 function startLocalBot() {
@@ -850,7 +1161,8 @@ function startLocalBot() {
   mode = "bot";
   botConfig = { 1: "3", 2: b1 };
   const t = parseInt(document.getElementById("timeSelect").value, 10);
-  initMatch(selectedGame, t, getBotName(b1), 1);
+  const meta = getBotMeta(b1);
+  initMatch(selectedGame, t, meta.name, meta.elo, 1);
 }
 
 function startSpectateBots() {
@@ -864,7 +1176,9 @@ function startSpectateBots() {
   mode = "spectate";
   botConfig = { 1: b1, 2: b2 };
   const t = parseInt(document.getElementById("timeSelect").value, 10);
-  initMatch(selectedGame, t, `${getBotName(b2)} (Black)`, 1, `${getBotName(b1)} (White)`);
+  const m1 = getBotMeta(b1);
+  const m2 = getBotMeta(b2);
+  initMatch(selectedGame, t, `${m2.name} (Black)`, m2.elo, 1, `${m1.name} (White)`, m1.elo);
   const mId = currentMatchId;
   setTimeout(() => runBotTurn(1, mId), 500);
 }
@@ -892,7 +1206,8 @@ function findQuickMatch() {
           mqttClient.publish(lobbyTopic, JSON.stringify({
             type: "seek",
             sender: myClientId,
-            guestId
+            playerName,
+            playerElo
           }));
         }
       };
@@ -913,7 +1228,7 @@ function hostFriendRoom() {
     mode = "host";
     roomTopic = `boardhub/v1/room/${code}`;
     mqttClient.subscribe(roomTopic, () => {
-      initMatch(g, t, "Waiting...", 1);
+      initMatch(g, t, "Waiting...", 1200, 1);
       setBanner(`Room Code: ${code} — Share with friend!`);
     });
   });
@@ -932,7 +1247,7 @@ function joinFriendRoom() {
     mode = "guest";
     roomTopic = `boardhub/v1/room/${code}`;
     mqttClient.subscribe(roomTopic, () => {
-      sendRoomMsg({ type: "hello", guestId });
+      sendRoomMsg({ type: "hello", playerName, playerElo });
     });
   });
 }
@@ -945,6 +1260,20 @@ function handleIncomingPacket(topic, payloadBuf) {
     return;
   }
   if (!msg) return;
+
+  // Retained & Live Leaderboard Entries
+  if (topic.startsWith(LB_PLAYER_PREFIX)) {
+    if (msg.id && msg.name) {
+      if (msg.id === deviceId) return; // Keep local authoritative profile for self
+      const prev = leaderboardMap.get(msg.id);
+      if (!prev || (msg.updated || 0) >= (prev.updated || 0)) {
+        leaderboardMap.set(msg.id, msg);
+        saveLeaderboardCache();
+        renderLeaderboard();
+      }
+    }
+    return;
+  }
 
   // Pico 2 W Status & Move Responses
   if (topic === PICO_STATUS_TOPIC) {
@@ -1005,7 +1334,7 @@ function handleIncomingPacket(topic, payloadBuf) {
       mode = "host";
 
       mqttClient.subscribe(roomTopic, () => {
-        initMatch(g, t, msg.guestId || "Opponent", 1);
+        initMatch(g, t, msg.playerName || "Opponent", msg.playerElo || 1200, 1);
         mqttClient.publish(lobbyTopic, JSON.stringify({
           type: "matched",
           sender: myClientId,
@@ -1033,8 +1362,7 @@ function handleIncomingPacket(topic, payloadBuf) {
   if (topic === roomTopic) {
     if (mode === "host") {
       if (msg.type === "hello") {
-        opponentName = msg.guestId || "Friend";
-        initMatch(gameType, baseTime, opponentName, 1);
+        initMatch(gameType, baseTime, msg.playerName || "Friend", msg.playerElo || 1200, 1);
         sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
       } else if (msg.type === "move") {
         executeMove(msg.move, 2, true);
@@ -1050,7 +1378,7 @@ function handleIncomingPacket(topic, payloadBuf) {
         finishMatch(3, "by agreement");
         syncToPeer();
       } else if (msg.type === "rematch") {
-        initMatch(gameType, baseTime, opponentName, mySide === 1 ? 2 : 1);
+        initMatch(gameType, baseTime, opponentName, opponentEloVal, mySide === 1 ? 2 : 1);
         syncToPeer();
       }
     } else if (mode === "guest") {
@@ -1068,7 +1396,8 @@ function handleIncomingPacket(topic, payloadBuf) {
 function buildSyncPayload() {
   return {
     gameType, baseTime, clocks, winner, endReason,
-    hostName: guestId,
+    hostName: playerName,
+    hostElo: playerElo,
     guestSide: mySide === 1 ? 2 : 1,
     fen: chess.fen(),
     chkBoard, chkTurn, c4Board, c4Turn,
@@ -1083,7 +1412,12 @@ function syncToPeer() {
 }
 
 function applySync(p) {
-  currentMatchId++;
+  const isNewMatch = (p.moveLog.length === 0 && moveLog.length > 0) || (p.gameType !== gameType);
+  if (isNewMatch) {
+    currentMatchId++;
+    ratingApplied = false;
+    ratingDeltaText = "";
+  }
   const prevLen = moveLog.length;
   gameType = p.gameType;
   selectedGame = p.gameType;
@@ -1092,10 +1426,10 @@ function applySync(p) {
 
   baseTime = p.baseTime;
   clocks = p.clocks;
-  winner = p.winner;
-  endReason = p.endReason;
   opponentName = p.hostName;
-  bottomTitle = `${guestId} (You)`;
+  opponentEloVal = p.hostElo || 1200;
+  bottomTitle = `${playerName} (You)`;
+  bottomEloVal = playerElo;
   mySide = p.guestSide;
   if (gameType === "chess") chess.load(p.fen);
   chkBoard = p.chkBoard;
@@ -1105,19 +1439,31 @@ function applySync(p) {
   lastMove = p.lastMove;
   moveLog = p.moveLog;
 
+  if (p.winner !== 0 && winner === 0) {
+    winner = p.winner;
+    endReason = p.endReason;
+    ratingDeltaText = applyRatedResult(p.winner);
+    bottomEloVal = playerElo;
+    playSound("end");
+  } else if (p.winner === 0) {
+    winner = 0;
+    endReason = "";
+    ratingApplied = false;
+    ratingDeltaText = "";
+  }
+
   document.getElementById("btnSpectate").classList.remove("spectate-active");
   document.getElementById("btnDraw").disabled = false;
   document.getElementById("btnResign").disabled = false;
   document.getElementById("btnRematch").disabled = false;
 
-  if (moveLog.length > prevLen) playSound("move");
-  if (winner !== 0) playSound("end");
+  if (moveLog.length > prevLen && winner === 0) playSound("move");
   startClockLoop();
   renderAll();
 }
 
 // ==========================================
-// 8. MOVE EXECUTION & RULES (CHESS / CHK / C4)
+// 9. MOVE EXECUTION & RULES (CHESS / CHK / C4)
 // ==========================================
 function requestMove(mv) {
   if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
@@ -1189,7 +1535,7 @@ function executeMove(mv, side, triggerNextBot) {
 }
 
 // ==========================================
-// 9. PICO WIFI BOT + STOCKFISH + MINIMAX
+// 10. PICO WIFI BOT + STOCKFISH + MINIMAX
 // ==========================================
 function askPicoForMove(botSide, reqMatchId) {
   if (!mqttClient || !mqttClient.connected) {
@@ -1207,7 +1553,6 @@ function askPicoForMove(botSide, reqMatchId) {
   const raw = JSON.stringify(payload);
   mqttClient.publish(PICO_REQ_TOPIC, raw);
 
-  // Automatic retry after 3.5s if Wi-Fi dropped the packet
   setTimeout(() => {
     if (pendingPicoReq && pendingPicoReq.reqId === reqId && reqMatchId === currentMatchId && winner === 0) {
       mqttClient.publish(PICO_REQ_TOPIC, raw);
@@ -1219,7 +1564,6 @@ function runBotTurn(botSide, reqMatchId) {
   if (reqMatchId !== currentMatchId || winner !== 0 || getCurrentTurn() !== botSide) return;
   const choice = botConfig[botSide];
 
-  // Route to Physical Pico 2 W over Wi-Fi
   if (choice === "pico") {
     askPicoForMove(botSide, reqMatchId);
     return;
@@ -1406,7 +1750,7 @@ function checkC4Win(b, r, c, side) {
 }
 
 // ==========================================
-// 10. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
+// 11. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
 // ==========================================
 function resignGame() {
   if (winner !== 0 || mode === "spectate") return;
@@ -1430,7 +1774,7 @@ function requestRematch() {
   } else if (mode === "bot") {
     startLocalBot();
   } else if (mode === "host") {
-    initMatch(gameType, baseTime, opponentName, mySide === 1 ? 2 : 1);
+    initMatch(gameType, baseTime, opponentName, opponentEloVal, mySide === 1 ? 2 : 1);
     syncToPeer();
   } else if (mode === "guest") {
     sendRoomMsg({ type: "rematch" });
@@ -1438,7 +1782,7 @@ function requestRematch() {
 }
 
 // ==========================================
-// 11. RENDER BOARD, CAPTURED PIECES & UI
+// 12. RENDER BOARD, CAPTURED PIECES & UI
 // ==========================================
 function setBanner(msg) {
   document.getElementById("statusBanner").textContent = msg;
@@ -1489,21 +1833,25 @@ function updateCapturedUI() {
 
 function renderAll() {
   const oppSide = 3 - mySide;
-  document.getElementById("botName").textContent = bottomTitle;
+  document.getElementById("botName").textContent = mode === "spectate" ? bottomTitle : `${playerName} (You)`;
+  document.getElementById("botElo").textContent = mode === "spectate" ? bottomEloVal : playerElo;
   document.getElementById("topName").textContent = opponentName;
+  document.getElementById("topElo").textContent = opponentEloVal;
   document.getElementById("botAvatar").textContent = mode === "spectate" ? "AI" : (mySide === 1 ? "P1" : "P2");
   document.getElementById("topAvatar").textContent = mode === "spectate" ? "AI" : (oppSide === 1 ? "P1" : "P2");
+  document.getElementById("stripSetNameBtn").style.display = (nameLocked || mode === "spectate") ? "none" : "inline-block";
 
   updateClockUI();
   updateCapturedUI();
 
   if (winner === 3) {
-    setBanner(`Draw (${endReason})`);
+    setBanner(`Draw (${endReason})${ratingDeltaText}`);
   } else if (winner !== 0) {
     if (mode === "spectate") {
       setBanner(`${winner === 1 ? bottomTitle : opponentName} Won ${endReason}`);
     } else {
-      setBanner(winner === mySide ? `You Won ${endReason}!` : `${opponentName} Won ${endReason}`);
+      const baseMsg = winner === mySide ? `You Won ${endReason}!` : `${opponentName} Won ${endReason}`;
+      setBanner(baseMsg + ratingDeltaText);
     }
   } else {
     const turn = getCurrentTurn();
