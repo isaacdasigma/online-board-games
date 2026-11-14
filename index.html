@@ -497,7 +497,8 @@
     }
     .chat-compose button.btn {
       width: auto;
-      padding: 8px 14px;
+      min-width: 62px;
+      padding: 8px 12px;
       background: var(--primary);
       border: none;
       color: #ffffff;
@@ -732,7 +733,7 @@
     <!-- ARENA CHAT: WORLD / MATCH OPPONENT / GROUP CHAT -->
     <div class="panel">
       <div class="panel-label">
-        <span>Arena Chat</span>
+        <span>Arena Chat (Filtered · 3s)</span>
         <span id="chatChannelStatus" style="color:#38bdf8;">Worldwide Lobby</span>
       </div>
 
@@ -1362,7 +1363,50 @@ function handleMidiUpload(inputEl) {
 })();
 
 // ==========================================
-// 3. PERSISTENT PROFILE, ONE-TIME NICKNAME & ELO
+// 3. CONTENT FILTER (CHAT & NICKNAMES)
+// ==========================================
+const BLOCKED_B64 = [
+  "ZnVjaw==", "c2hpdA==", "Yml0Y2g=", "YXNzaG9sZQ==", "Y3VudA==",
+  "ZGljaw==", "cHVzc3k=", "bmlnZ2Vy", "bmlnZ2E=", "ZmFnZ290",
+  "cmV0YXJk", "c2x1dA==", "d2hvcmU=", "a3lz"
+];
+const BLOCKED_WORDS = BLOCKED_B64.map(b => atob(b));
+
+function normalizeForFilter(token) {
+  return token
+    .toLowerCase()
+    .replace(/[@4]/g, "a")
+    .replace(/3/g, "e")
+    .replace(/[1!]/g, "i")
+    .replace(/0/g, "o")
+    .replace(/[$5]/g, "s")
+    .replace(/7/g, "t")
+    .replace(/[^a-z]/g, "")
+    .replace(/(.)\1{2,}/g, "$1$1");
+}
+
+function filterChatText(raw) {
+  let clean = String(raw || "")
+    .replace(/(https?:\/\/|www\.)\S+/gi, "[link removed]")
+    .replace(/(.)\1{6,}/g, "$1$1$1$1");
+
+  return clean.split(/(\s+)/).map(part => {
+    if (!part.trim()) return part;
+    const norm = normalizeForFilter(part);
+    const collapsed = norm.replace(/(.)\1+/g, "$1");
+    for (const w of BLOCKED_WORDS) {
+      const wCollapsed = w.replace(/(.)\1+/g, "$1");
+      const re = new RegExp(`^(${w}|${wCollapsed})(s|es|ed|er|ers|ing|y|hole|head|face)?$`);
+      if (re.test(norm) || re.test(collapsed)) {
+        return "*".repeat(Math.max(4, part.length));
+      }
+    }
+    return part;
+  }).join("");
+}
+
+// ==========================================
+// 4. PERSISTENT PROFILE, ONE-TIME NICKNAME & ELO
 // ==========================================
 let deviceId = localStorage.getItem("bh_device_id");
 if (!deviceId) {
@@ -1459,6 +1503,10 @@ function confirmNickname() {
     alert("Please enter a nickname between 2 and 14 characters (letters, numbers, spaces, or _).");
     return;
   }
+  if (filterChatText(clean).includes("*")) {
+    alert("Please choose a clean nickname.");
+    return;
+  }
   if (!confirm(`Lock in "${clean}" permanently on this device? You can only change your nickname once.`)) {
     return;
   }
@@ -1484,7 +1532,7 @@ function renderLeaderboard() {
     const row = document.createElement("div");
     row.className = "lb-row" + (isMe ? " me" : "");
     const rankCls = idx === 0 ? "top1" : idx === 1 ? "top2" : idx === 2 ? "top3" : "";
-    const safeName = String(p.name || "Player").replace(/[<>&]/g, "");
+    const safeName = filterChatText(String(p.name || "Player")).replace(/[<>&]/g, "");
     row.innerHTML = `
       <span class="lb-rank ${rankCls}">#${idx + 1}</span>
       <span class="lb-name">${safeName}${isMe ? " (You)" : ""}</span>
@@ -1523,14 +1571,16 @@ function applyRatedResult(winSide) {
 }
 
 // ==========================================
-// 4. ARENA CHAT SYSTEM (WORLD / MATCH / GROUP)
+// 5. ARENA CHAT SYSTEM (WORLD / MATCH / GROUP + 3S COOLDOWN)
 // ==========================================
 const WORLD_CHAT_TOPIC = "boardhub/v1/chat/world";
 const GROUP_CHAT_PREFIX = "boardhub/v1/chat/group/";
+const CHAT_COOLDOWN_MS = 3000;
 
 let activeChatTab = "world";
 let activeGroupCode = localStorage.getItem("bh_group_code") || "";
 let lastChatSendTs = 0;
+let chatCooldownTimer = null;
 
 const chatHistory = {
   world: [
@@ -1546,9 +1596,36 @@ const chatHistory = {
 
 const chatUnread = { world: 0, match: 0, group: 0 };
 
+function startChatCooldownUI() {
+  const btn = document.getElementById("btnSendChat");
+  if (!btn) return;
+  if (chatCooldownTimer) clearInterval(chatCooldownTimer);
+
+  const tick = () => {
+    const remaining = CHAT_COOLDOWN_MS - (Date.now() - lastChatSendTs);
+    if (remaining <= 0) {
+      clearInterval(chatCooldownTimer);
+      chatCooldownTimer = null;
+      btn.disabled = false;
+      btn.textContent = "Send";
+    } else {
+      btn.disabled = true;
+      btn.textContent = `${Math.ceil(remaining / 1000)}s`;
+    }
+  };
+  tick();
+  chatCooldownTimer = setInterval(tick, 200);
+}
+
 function appendChatMessage(channel, entry, notifySound = false) {
   const list = chatHistory[channel];
   if (!list) return;
+  if (!entry.sys && entry.text) {
+    entry.text = filterChatText(entry.text);
+  }
+  if (!entry.sys && entry.name) {
+    entry.name = filterChatText(entry.name);
+  }
   list.push(entry);
   if (list.length > 65) list.shift();
 
@@ -1577,26 +1654,19 @@ function updateChatHeaderAndControls() {
   const statusEl = document.getElementById("chatChannelStatus");
   const groupBar = document.getElementById("groupControlsBar");
   const inputEl = document.getElementById("chatInput");
-  const sendBtn = document.getElementById("btnSendChat");
 
   groupBar.classList.toggle("show", activeChatTab === "group");
 
   if (activeChatTab === "world") {
     statusEl.textContent = "Worldwide Lobby";
-    inputEl.disabled = false;
-    sendBtn.disabled = false;
     inputEl.placeholder = "Message everyone online...";
   } else if (activeChatTab === "match") {
     const inOnlineMatch = (mode === "host" || mode === "guest") && Boolean(roomTopic);
     if (inOnlineMatch) {
       statusEl.textContent = `vs ${opponentName}`;
-      inputEl.disabled = false;
-      sendBtn.disabled = false;
       inputEl.placeholder = `Message ${opponentName}...`;
     } else {
       statusEl.textContent = "Offline / Bot Match";
-      inputEl.disabled = false;
-      sendBtn.disabled = false;
       inputEl.placeholder = "Message opponent (online matches only)...";
     }
   } else if (activeChatTab === "group") {
@@ -1743,18 +1813,19 @@ function leaveGroupChat() {
 }
 
 function sendChatMessage() {
+  const now = Date.now();
+  if (now - lastChatSendTs < CHAT_COOLDOWN_MS) return;
+
   const inp = document.getElementById("chatInput");
   const raw = inp.value.trim();
   if (!raw) return;
 
-  const now = Date.now();
-  if (now - lastChatSendTs < 450) return;
-  lastChatSendTs = now;
-
-  const text = raw.slice(0, 160);
+  const text = filterChatText(raw.slice(0, 160));
   inp.value = "";
 
   if (activeChatTab === "world") {
+    lastChatSendTs = now;
+    startChatCooldownUI();
     appendChatMessage("world", { mine: true, name: playerName, elo: playerElo, text });
     connectGlobalRelay(() => {
       mqttClient.publish(WORLD_CHAT_TOPIC, JSON.stringify({
@@ -1770,6 +1841,8 @@ function sendChatMessage() {
       appendChatMessage("match", { sys: true, text: "You're playing a bot — start an online match to chat with an opponent!" });
       return;
     }
+    lastChatSendTs = now;
+    startChatCooldownUI();
     appendChatMessage("match", { mine: true, name: playerName, elo: playerElo, text });
     sendRoomMsg({
       type: "match_chat",
@@ -1782,6 +1855,8 @@ function sendChatMessage() {
       appendChatMessage("group", { sys: true, text: "Click 'New Group' or enter a code to join a group first!" });
       return;
     }
+    lastChatSendTs = now;
+    startChatCooldownUI();
     appendChatMessage("group", { mine: true, name: playerName, elo: playerElo, text });
     connectGlobalRelay(() => {
       mqttClient.publish(GROUP_CHAT_PREFIX + activeGroupCode, JSON.stringify({
@@ -1799,7 +1874,7 @@ updateChatHeaderAndControls();
 renderChatFeed();
 
 // ==========================================
-// 5. STOCKFISH WEB WORKER + PICO CALLBACKS
+// 6. STOCKFISH WEB WORKER + PICO CALLBACKS
 // ==========================================
 let sfWorker = null;
 let sfReady = false;
@@ -1856,7 +1931,7 @@ setInterval(() => {
 }, 2000);
 
 // ==========================================
-// 6. CRISP VECTOR SVG CHESS PIECES
+// 7. CRISP VECTOR SVG CHESS PIECES
 // ==========================================
 function getPieceSVG(color, type, cls = "piece-svg") {
   const fill = color === "w" ? "#ffffff" : "#1e293b";
@@ -1875,7 +1950,7 @@ function getPieceSVG(color, type, cls = "piece-svg") {
 }
 
 // ==========================================
-// 7. GAME STATE & TOP TAB SWITCHER
+// 8. GAME STATE & TOP TAB SWITCHER
 // ==========================================
 let currentMatchId = 0;
 let selectedGame = "chess";
@@ -1916,7 +1991,7 @@ function selectGame(g) {
 }
 
 // ==========================================
-// 8. INITIALIZE & CLOCK MANAGEMENT
+// 9. INITIALIZE & CLOCK MANAGEMENT
 // ==========================================
 function initMatch(gType, tSec, oppName, oppElo, side, botTitleOverride = null, botEloOverride = null) {
   currentMatchId++;
@@ -2009,7 +2084,7 @@ function finishMatch(winSide, reason) {
 }
 
 // ==========================================
-// 9. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
+// 10. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
 // ==========================================
 const BROKERS = [
   "wss://mqtt.eclipseprojects.io:443/mqtt",
@@ -2147,7 +2222,7 @@ saveMyProfileLocally();
 connectGlobalRelay();
 
 // ==========================================
-// 10. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
+// 11. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
 // ==========================================
 function getBotMeta(val) {
   if (val === "pico") return { name: "Pico 2 W Bot", elo: 1150 };
@@ -2342,7 +2417,7 @@ function handleIncomingPacket(topic, payloadBuf) {
         text: String(msg.text).slice(0, 160)
       }, true);
     } else if (msg.type === "group_sys" && msg.text) {
-      appendChatMessage("group", { sys: true, text: String(msg.text).slice(0, 120) });
+      appendChatMessage("group", { sys: true, text: filterChatText(String(msg.text).slice(0, 120)) });
     }
     return;
   }
@@ -2363,7 +2438,7 @@ function handleIncomingPacket(topic, payloadBuf) {
 
       mqttClient.subscribe(roomTopic, () => {
         initMatch(g, t, msg.playerName || "Opponent", msg.playerElo || 1200, 1);
-        appendChatMessage("match", { sys: true, text: `Matched vs ${msg.playerName || "Opponent"}!` });
+        appendChatMessage("match", { sys: true, text: `Matched vs ${filterChatText(msg.playerName || "Opponent")}!` });
         mqttClient.publish(lobbyTopic, JSON.stringify({
           type: "matched",
           sender: myClientId,
@@ -2382,7 +2457,7 @@ function handleIncomingPacket(topic, payloadBuf) {
       mode = "guest";
       mqttClient.subscribe(roomTopic, () => {
         applySync(msg.payload);
-        appendChatMessage("match", { sys: true, text: `Matched vs ${msg.payload.hostName || "Opponent"}!` });
+        appendChatMessage("match", { sys: true, text: `Matched vs ${filterChatText(msg.payload.hostName || "Opponent")}!` });
       });
     }
     return;
@@ -2402,7 +2477,7 @@ function handleIncomingPacket(topic, payloadBuf) {
     if (mode === "host") {
       if (msg.type === "hello") {
         initMatch(gameType, baseTime, msg.playerName || "Friend", msg.playerElo || 1200, 1);
-        appendChatMessage("match", { sys: true, text: `${msg.playerName || "Friend"} joined the room!` });
+        appendChatMessage("match", { sys: true, text: `${filterChatText(msg.playerName || "Friend")} joined the room!` });
         sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
       } else if (msg.type === "move") {
         executeMove(msg.move, 2, true);
@@ -2466,7 +2541,7 @@ function applySync(p) {
 
   baseTime = p.baseTime;
   clocks = p.clocks;
-  opponentName = p.hostName;
+  opponentName = filterChatText(p.hostName || "Opponent");
   opponentEloVal = p.hostElo || 1200;
   bottomTitle = `${playerName} (You)`;
   bottomEloVal = playerElo;
@@ -2504,7 +2579,7 @@ function applySync(p) {
 }
 
 // ==========================================
-// 11. MOVE EXECUTION & RULES (CHESS / CHK / C4)
+// 12. MOVE EXECUTION & RULES (CHESS / CHK / C4)
 // ==========================================
 function requestMove(mv) {
   if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
@@ -2576,7 +2651,7 @@ function executeMove(mv, side, triggerNextBot) {
 }
 
 // ==========================================
-// 12. PICO WIFI BOT + STOCKFISH + MINIMAX
+// 13. PICO WIFI BOT + STOCKFISH + MINIMAX
 // ==========================================
 function askPicoForMove(botSide, reqMatchId) {
   if (!mqttClient || !mqttClient.connected) {
@@ -2791,7 +2866,7 @@ function checkC4Win(b, r, c, side) {
 }
 
 // ==========================================
-// 13. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
+// 14. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
 // ==========================================
 function resignGame() {
   if (winner !== 0 || mode === "spectate") return;
@@ -2823,7 +2898,7 @@ function requestRematch() {
 }
 
 // ==========================================
-// 14. RENDER BOARD, CAPTURED PIECES & UI
+// 15. RENDER BOARD, CAPTURED PIECES & UI
 // ==========================================
 function setBanner(msg) {
   document.getElementById("statusBanner").textContent = msg;
