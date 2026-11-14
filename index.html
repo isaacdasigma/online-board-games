@@ -48,12 +48,12 @@
       z-index: 20;
     }
     .nav-inner {
-      max-width: 1120px;
+      max-width: 1160px;
       width: 100%;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
     }
     .logo {
@@ -98,7 +98,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     }
 
-    .pills { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .pills { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
     .pill {
       display: inline-flex; align-items: center; gap: 6px;
       font-size: 12px; font-weight: 700; padding: 5px 10px;
@@ -135,11 +135,11 @@
 
     /* MAIN ARENA LAYOUT */
     .arena {
-      max-width: 1120px;
+      max-width: 1160px;
       width: 100%;
       padding: 20px 16px;
       display: grid;
-      grid-template-columns: minmax(300px, 500px) minmax(300px, 405px);
+      grid-template-columns: minmax(300px, 500px) minmax(300px, 410px);
       gap: 24px;
       justify-content: center;
       align-items: start;
@@ -354,7 +354,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      height: 110px;
+      height: 105px;
       overflow-y: auto;
       padding: 8px;
       font-size: 13px;
@@ -370,7 +370,7 @@
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9px;
-      max-height: 160px;
+      max-height: 155px;
       overflow-y: auto;
       padding: 6px;
       display: flex;
@@ -461,6 +461,8 @@
 
     <div class="pills">
       <button class="pill music-btn" id="musicToggleBtn" onclick="toggleLobbyMusic()">Music: Off</button>
+      <button class="pill music-btn" onclick="document.getElementById('midiFileInput').click()">Upload MIDI</button>
+      <input type="file" id="midiFileInput" accept=".mid,.midi" style="display:none" onchange="handleMidiUpload(this)" />
       <span class="pill online"><span class="live-dot"></span><span id="onlineCountText">1 Online</span></span>
       <span class="pill" id="picoStatusBadge">Pico: Offline</span>
       <span class="pill" id="netBadge">Connecting...</span>
@@ -561,17 +563,22 @@
           </select>
         </div>
         <div>
-          <span class="field-lbl">Time Control</span>
-          <select id="timeSelect">
-            <option value="180">3 min Blitz</option>
-            <option value="60">1 min Bullet</option>
-            <option value="600">10 min Rapid</option>
-            <option value="0">Untimed</option>
+          <span class="field-lbl">Lobby Music Track</span>
+          <select id="musicTrackSelect" onchange="switchMusicTrack(this.value)">
+            <option value="deltarune">Deltarune Synth</option>
           </select>
         </div>
       </div>
 
-      <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
+      <div class="row-2">
+        <select id="timeSelect">
+          <option value="180">3 min Blitz</option>
+          <option value="60">1 min Bullet</option>
+          <option value="600">10 min Rapid</option>
+          <option value="0">Untimed</option>
+        </select>
+        <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
+      </div>
 
       <div class="row-2">
         <button class="btn" onclick="hostFriendRoom()">Create Room</button>
@@ -683,9 +690,13 @@ function applyBoardTheme(themeKey) {
 applyBoardTheme(localStorage.getItem("bh_board_theme") || "slate");
 
 // ==========================================
-// 2. SOUND ENGINE & DELTARUNE LOBBY SYNTH
+// 2. SOUND ENGINE, DELTARUNE SYNTH & MIDI PLAYER
 // ==========================================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const musicBus = audioCtx.createDynamicsCompressor();
+musicBus.threshold.value = -16;
+musicBus.ratio.value = 6;
+musicBus.connect(audioCtx.destination);
 
 function playSound(type) {
   if (audioCtx.state === "suspended") audioCtx.resume();
@@ -727,20 +738,25 @@ function playSound(type) {
   }
 }
 
-// 8-Bar Deltarune Castle Town / Hip Shop Inspired Loop (BbMaj7 -> Am7 -> Dm7 -> Gm7 -> C7)
+function midiToFreq(m) {
+  return 440 * Math.pow(2, (m - 69) / 12);
+}
+
+// --- Built-in Deltarune Lobby Synth ---
 let musicPlaying = false;
-let musicTimer = null;
-let musicStep = 0;
+let selectedMusicTrack = localStorage.getItem("bh_music_track") || "deltarune";
+let synthTimer = null;
+let synthStep = 0;
 
 const DR_LEAD = [
-  77,  0, 74, 77, 81,  0, 79, 77, // Bar 1: BbMaj7
-  76,  0, 72, 76, 79,  0, 77, 76, // Bar 2: Am7
-  74,  0, 69, 72, 74, 76, 77,  0, // Bar 3: Dm7
-  72,  0, 74,  0, 76,  0, 77, 79, // Bar 4: Csus4
-  81,  0, 79, 77, 74,  0, 77,  0, // Bar 5: BbMaj7
-  79,  0, 76, 72, 75,  0, 78,  0, // Bar 6: Am7 -> D7b9
-  79,  0, 77, 74, 70,  0, 72, 74, // Bar 7: Gm7
-  77,  0, 76,  0, 72,  0,  0,  0  // Bar 8: C7 turnaround
+  77,  0, 74, 77, 81,  0, 79, 77,
+  76,  0, 72, 76, 79,  0, 77, 76,
+  74,  0, 69, 72, 74, 76, 77,  0,
+  72,  0, 74,  0, 76,  0, 77, 79,
+  81,  0, 79, 77, 74,  0, 77,  0,
+  79,  0, 76, 72, 75,  0, 78,  0,
+  79,  0, 77, 74, 70,  0, 72, 74,
+  77,  0, 76,  0, 72,  0,  0,  0
 ];
 
 const DR_ARP = [
@@ -765,75 +781,413 @@ const DR_BASS = [
   48,  0, 55,  0, 48,  0, 52,  0
 ];
 
-function midiToFreq(m) {
-  return 440 * Math.pow(2, (m - 69) / 12);
-}
-
-function triggerSynthVoice(midi, waveType, peakGain, duration) {
-  if (!midi || !musicPlaying) return;
-  const now = audioCtx.currentTime;
+function scheduleSynthNote(when, midi, waveType, peakGain, duration) {
+  if (!midi) return;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   osc.type = waveType;
-  osc.frequency.setValueAtTime(midiToFreq(midi), now);
+  osc.frequency.setValueAtTime(midiToFreq(midi), when);
 
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.linearRampToValueAtTime(peakGain, now + 0.015);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.linearRampToValueAtTime(peakGain, when + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
 
   osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start(now);
-  osc.stop(now + duration + 0.02);
+  gain.connect(musicBus);
+  osc.start(when);
+  osc.stop(when + duration + 0.02);
 }
 
-function stepLobbyMusic() {
+function stepDeltaruneSynth() {
+  if (!musicPlaying || selectedMusicTrack !== "deltarune") return;
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  const now = audioCtx.currentTime;
+  const idx = synthStep % 64;
+  scheduleSynthNote(now, DR_LEAD[idx], "triangle", 0.08, 0.48);
+  scheduleSynthNote(now, DR_ARP[idx], "square", 0.022, 0.22);
+  scheduleSynthNote(now, DR_BASS[idx], "sine", 0.1, 0.42);
+  synthStep++;
+}
+
+// --- Zero-Dependency Standard MIDI File (.mid) Parser & Scheduler ---
+let customMidiData = null; // { name, notes: [{ start, dur, midi, vel, ch, prog }], duration }
+let midiSchedulerTimer = null;
+let midiStartCtxTime = 0;
+let midiNextNoteIdx = 0;
+let midiLoopCount = 0;
+
+function readVLQ(view, st) {
+  let val = 0;
+  while (st.pos < view.byteLength) {
+    const b = view.getUint8(st.pos++);
+    val = (val << 7) | (b & 0x7f);
+    if ((b & 0x80) === 0) break;
+  }
+  return val;
+}
+
+function parseStandardMidi(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 14 || view.getUint32(0) !== 0x4d546864) {
+    throw new Error("Invalid MIDI file header (MThd missing).");
+  }
+  const hdrLen = view.getUint32(4);
+  const numTracks = view.getUint16(10);
+  const rawDiv = view.getInt16(12);
+  const tpqn = rawDiv > 0 ? rawDiv : 480;
+
+  let pos = 8 + hdrLen;
+  const rawEvents = [];
+
+  for (let t = 0; t < numTracks && pos + 8 <= view.byteLength; t++) {
+    const chunkId = view.getUint32(pos);
+    const chunkLen = view.getUint32(pos + 4);
+    pos += 8;
+    const trackEnd = Math.min(view.byteLength, pos + chunkLen);
+
+    if (chunkId !== 0x4d54726b) { // Not MTrk
+      pos = trackEnd;
+      continue;
+    }
+
+    const st = { pos };
+    let absTick = 0;
+    let runningStatus = 0;
+
+    while (st.pos < trackEnd) {
+      absTick += readVLQ(view, st);
+      if (st.pos >= trackEnd) break;
+
+      let status = view.getUint8(st.pos);
+      if (status < 0x80) {
+        status = runningStatus;
+      } else {
+        st.pos++;
+        if (status < 0xf0) runningStatus = status;
+      }
+
+      if (status === 0xff) {
+        if (st.pos >= trackEnd) break;
+        const metaType = view.getUint8(st.pos++);
+        const metaLen = readVLQ(view, st);
+        if (metaType === 0x51 && metaLen === 3 && st.pos + 3 <= trackEnd) {
+          const usPerBeat =
+            (view.getUint8(st.pos) << 16) |
+            (view.getUint8(st.pos + 1) << 8) |
+            view.getUint8(st.pos + 2);
+          rawEvents.push({ tick: absTick, order: 0, type: "tempo", usPerBeat });
+        }
+        st.pos += metaLen;
+      } else if (status === 0xf0 || status === 0xf7) {
+        const sysLen = readVLQ(view, st);
+        st.pos += sysLen;
+      } else {
+        const cmd = status & 0xf0;
+        const ch = status & 0x0f;
+        if (cmd === 0x80) {
+          const note = view.getUint8(st.pos++);
+          st.pos++;
+          rawEvents.push({ tick: absTick, order: 1, type: "off", ch, note });
+        } else if (cmd === 0x90) {
+          const note = view.getUint8(st.pos++);
+          const vel = view.getUint8(st.pos++);
+          rawEvents.push({
+            tick: absTick,
+            order: vel > 0 ? 3 : 1,
+            type: vel > 0 ? "on" : "off",
+            ch,
+            note,
+            vel
+          });
+        } else if (cmd === 0xa0 || cmd === 0xb0 || cmd === 0xe0) {
+          st.pos += 2;
+        } else if (cmd === 0xc0) {
+          const prog = view.getUint8(st.pos++);
+          rawEvents.push({ tick: absTick, order: 2, type: "prog", ch, prog });
+        } else if (cmd === 0xd0) {
+          st.pos += 1;
+        } else {
+          break;
+        }
+      }
+    }
+    pos = trackEnd;
+  }
+
+  rawEvents.sort((a, b) => (a.tick - b.tick) || (a.order - b.order));
+
+  let lastTick = 0;
+  let elapsedSec = 0;
+  let usPerBeat = 500000; // Default 120 BPM
+  const chProg = new Array(16).fill(0);
+  const active = new Map();
+  const notes = [];
+
+  for (const ev of rawEvents) {
+    if (ev.tick > lastTick) {
+      elapsedSec += ((ev.tick - lastTick) / tpqn) * (usPerBeat / 1000000);
+      lastTick = ev.tick;
+    }
+    if (ev.type === "tempo") {
+      usPerBeat = Math.max(50000, ev.usPerBeat);
+    } else if (ev.type === "prog") {
+      chProg[ev.ch] = ev.prog;
+    } else if (ev.type === "on") {
+      const key = `${ev.ch}_${ev.note}`;
+      if (!active.has(key)) active.set(key, []);
+      active.get(key).push({
+        start: elapsedSec,
+        midi: ev.note,
+        vel: ev.vel,
+        ch: ev.ch,
+        prog: chProg[ev.ch]
+      });
+    } else if (ev.type === "off") {
+      const key = `${ev.ch}_${ev.note}`;
+      const q = active.get(key);
+      if (q && q.length > 0) {
+        const stNote = q.shift();
+        const dur = Math.max(0.05, Math.min(6.0, elapsedSec - stNote.start));
+        notes.push({ ...stNote, dur });
+      }
+    }
+  }
+
+  for (const q of active.values()) {
+    for (const stNote of q) {
+      notes.push({ ...stNote, dur: 0.4 });
+    }
+  }
+
+  notes.sort((a, b) => a.start - b.start);
+  const totalDuration = Math.max(1.0, elapsedSec + 0.6);
+  return { notes, duration: totalDuration };
+}
+
+function scheduleMidiPercussion(when, midiNote, vel) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const amp = (vel / 127) * 0.11;
+
+  if (midiNote === 35 || midiNote === 36) {
+    // Kick
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(135, when);
+    osc.frequency.exponentialRampToValueAtTime(38, when + 0.12);
+    gain.gain.setValueAtTime(amp * 1.4, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
+  } else if (midiNote === 38 || midiNote === 40) {
+    // Snare
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(220, when);
+    osc.frequency.exponentialRampToValueAtTime(90, when + 0.11);
+    gain.gain.setValueAtTime(amp, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.12);
+  } else {
+    // Hi-hat / Cymbal
+    osc.type = "square";
+    osc.frequency.setValueAtTime(850, when);
+    gain.gain.setValueAtTime(amp * 0.35, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
+  }
+
+  osc.connect(gain);
+  gain.connect(musicBus);
+  osc.start(when);
+  osc.stop(when + 0.16);
+}
+
+function scheduleCustomMidiNote(when, n) {
+  if (n.ch === 9) {
+    scheduleMidiPercussion(when, n.midi, n.vel);
+    return;
+  }
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  // Map GM Program families to pleasant retro synth waveforms
+  let wave = "triangle";
+  let scale = 0.055;
+  if (n.prog >= 32 && n.prog <= 39) {
+    wave = "sine"; // Bass
+    scale = 0.09;
+  } else if (n.prog >= 80 && n.prog <= 87) {
+    wave = "square"; // Synth Lead
+    scale = 0.032;
+  } else if (n.prog >= 48 && n.prog <= 79) {
+    wave = "sawtooth"; // Strings / Brass
+    scale = 0.025;
+  }
+
+  const peak = Math.max(0.005, (n.vel / 127) * scale);
+  osc.type = wave;
+  osc.frequency.setValueAtTime(midiToFreq(n.midi), when);
+
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.linearRampToValueAtTime(peak, when + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + n.dur + 0.04);
+
+  osc.connect(gain);
+  gain.connect(musicBus);
+  osc.start(when);
+  osc.stop(when + n.dur + 0.06);
+}
+
+function pumpCustomMidiScheduler() {
+  if (!musicPlaying || selectedMusicTrack !== "custom" || !customMidiData) return;
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  const now = audioCtx.currentTime;
+  const lookahead = 0.25;
+  const { notes, duration } = customMidiData;
+  if (!notes.length) return;
+
+  while (true) {
+    const loopOffset = midiLoopCount * duration;
+    if (midiNextNoteIdx >= notes.length) {
+      midiLoopCount++;
+      midiNextNoteIdx = 0;
+      continue;
+    }
+    const n = notes[midiNextNoteIdx];
+    const playAt = midiStartCtxTime + loopOffset + n.start;
+    if (playAt <= now + lookahead) {
+      if (playAt >= now - 0.05) {
+        scheduleCustomMidiNote(Math.max(now, playAt), n);
+      }
+      midiNextNoteIdx++;
+    } else {
+      break;
+    }
+  }
+}
+
+function stopAllMusicTimers() {
+  if (synthTimer) { clearInterval(synthTimer); synthTimer = null; }
+  if (midiSchedulerTimer) { clearInterval(midiSchedulerTimer); midiSchedulerTimer = null; }
+}
+
+function startActiveMusicPlayback() {
+  stopAllMusicTimers();
   if (!musicPlaying) return;
   if (audioCtx.state === "suspended") audioCtx.resume();
-  const idx = musicStep % 64;
-  triggerSynthVoice(DR_LEAD[idx], "triangle", 0.075, 0.48);
-  triggerSynthVoice(DR_ARP[idx], "square", 0.022, 0.22);
-  triggerSynthVoice(DR_BASS[idx], "sine", 0.095, 0.42);
-  musicStep++;
+
+  if (selectedMusicTrack === "custom" && customMidiData) {
+    midiStartCtxTime = audioCtx.currentTime + 0.05;
+    midiNextNoteIdx = 0;
+    midiLoopCount = 0;
+    pumpCustomMidiScheduler();
+    midiSchedulerTimer = setInterval(pumpCustomMidiScheduler, 50);
+  } else {
+    selectedMusicTrack = "deltarune";
+    stepDeltaruneSynth();
+    synthTimer = setInterval(stepDeltaruneSynth, 290);
+  }
 }
 
-function updateMusicButtonUI() {
+function updateMusicUI() {
   const btn = document.getElementById("musicToggleBtn");
-  if (!btn) return;
-  btn.textContent = musicPlaying ? "Music: On" : "Music: Off";
-  btn.className = "pill music-btn" + (musicPlaying ? " music-on" : "");
+  if (btn) {
+    btn.textContent = musicPlaying ? "Music: On" : "Music: Off";
+    btn.className = "pill music-btn" + (musicPlaying ? " music-on" : "");
+  }
+  const sel = document.getElementById("musicTrackSelect");
+  if (sel) {
+    sel.innerHTML = `<option value="deltarune">Deltarune Synth</option>`;
+    if (customMidiData) {
+      const opt = document.createElement("option");
+      opt.value = "custom";
+      opt.textContent = `MIDI: ${customMidiData.name}`;
+      sel.appendChild(opt);
+    }
+    sel.value = (selectedMusicTrack === "custom" && customMidiData) ? "custom" : "deltarune";
+  }
 }
 
 function toggleLobbyMusic() {
   musicPlaying = !musicPlaying;
   localStorage.setItem("bh_music_pref", musicPlaying ? "on" : "off");
-  updateMusicButtonUI();
-
-  if (musicPlaying) {
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    if (musicTimer) clearInterval(musicTimer);
-    stepLobbyMusic();
-    musicTimer = setInterval(stepLobbyMusic, 290); // ~103 BPM eighth-note groove
-  } else if (musicTimer) {
-    clearInterval(musicTimer);
-    musicTimer = null;
-  }
+  updateMusicUI();
+  if (musicPlaying) startActiveMusicPlayback();
+  else stopAllMusicTimers();
 }
 
-// Resume music on first click if user had it enabled previously
-if (localStorage.getItem("bh_music_pref") === "on") {
-  musicPlaying = true;
-  updateMusicButtonUI();
-  const unlockOnce = () => {
-    if (musicPlaying && !musicTimer) {
-      if (audioCtx.state === "suspended") audioCtx.resume();
-      stepLobbyMusic();
-      musicTimer = setInterval(stepLobbyMusic, 290);
+function switchMusicTrack(trackVal) {
+  selectedMusicTrack = trackVal;
+  localStorage.setItem("bh_music_track", trackVal);
+  updateMusicUI();
+  if (musicPlaying) startActiveMusicPlayback();
+}
+
+function handleMidiUpload(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const buf = reader.result;
+      const parsed = parseStandardMidi(buf);
+      if (!parsed.notes.length) {
+        setBanner("No playable notes found in that MIDI file.");
+        return;
+      }
+      const cleanName = file.name.replace(/\.(mid|midi)$/i, "").slice(0, 22);
+      customMidiData = { name: cleanName, notes: parsed.notes, duration: parsed.duration };
+      selectedMusicTrack = "custom";
+      localStorage.setItem("bh_music_track", "custom");
+
+      // Save to device storage if <= 1.5 MB
+      if (buf.byteLength <= 1500000) {
+        const bytes = new Uint8Array(buf);
+        let bin = "";
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        localStorage.setItem("bh_custom_midi_b64", btoa(bin));
+        localStorage.setItem("bh_custom_midi_name", cleanName);
+      }
+
+      musicPlaying = true;
+      localStorage.setItem("bh_music_pref", "on");
+      updateMusicUI();
+      startActiveMusicPlayback();
+      setBanner(`Playing MIDI: ${cleanName} (${parsed.notes.length} notes)`);
+    } catch (err) {
+      setBanner("Could not read MIDI file — try a standard .mid file.");
     }
-    window.removeEventListener("pointerdown", unlockOnce);
+    inputEl.value = "";
   };
-  window.addEventListener("pointerdown", unlockOnce);
+  reader.readAsArrayBuffer(file);
 }
+
+// Restore saved custom MIDI from device if present
+(function restoreSavedMidi() {
+  try {
+    const b64 = localStorage.getItem("bh_custom_midi_b64");
+    const savedName = localStorage.getItem("bh_custom_midi_name");
+    if (b64 && savedName) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const parsed = parseStandardMidi(bytes.buffer);
+      if (parsed.notes.length) {
+        customMidiData = { name: savedName, notes: parsed.notes, duration: parsed.duration };
+      }
+    }
+  } catch (e) {}
+  updateMusicUI();
+
+  if (localStorage.getItem("bh_music_pref") === "on") {
+    musicPlaying = true;
+    updateMusicUI();
+    const unlockOnce = () => {
+      if (musicPlaying && !synthTimer && !midiSchedulerTimer) {
+        startActiveMusicPlayback();
+      }
+      window.removeEventListener("pointerdown", unlockOnce);
+    };
+    window.addEventListener("pointerdown", unlockOnce);
+  }
+})();
 
 // ==========================================
 // 3. PERSISTENT PROFILE, ONE-TIME NICKNAME & ELO
@@ -1077,7 +1431,7 @@ function getPieceSVG(color, type, cls = "piece-svg") {
 // ==========================================
 let currentMatchId = 0;
 let selectedGame = "chess";
-let mode = "bot"; // "bot" | "spectate" | "host" | "guest"
+let mode = "bot";
 let mySide = 1;
 let gameType = "chess";
 let baseTime = 180;
