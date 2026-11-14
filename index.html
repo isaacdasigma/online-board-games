@@ -472,6 +472,14 @@
       text-align: center;
       padding: 2px 4px;
     }
+    .chat-msg.announce {
+      background: rgba(251, 191, 36, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      color: #fbbf24;
+      font-weight: 700;
+      text-align: center;
+      font-size: 12px;
+    }
     .chat-sender {
       font-weight: 800;
       color: #38bdf8;
@@ -733,7 +741,7 @@
     <!-- ARENA CHAT: WORLD / MATCH OPPONENT / GROUP CHAT -->
     <div class="panel">
       <div class="panel-label">
-        <span>Arena Chat (Filtered · 3s)</span>
+        <span id="chatPanelTitle">Arena Chat (Filtered · 3s)</span>
         <span id="chatChannelStatus" style="color:#38bdf8;">Worldwide Lobby</span>
       </div>
 
@@ -800,6 +808,12 @@
 </div>
 
 <script>
+// ==========================================
+// 0. SECRET OP ADMIN PASSWORD (CHANGE THIS!)
+// ==========================================
+const ADMIN_PASS = "2026";
+let isOpAdmin = false;
+
 // ==========================================
 // 1. CUSTOM BOARD THEMES
 // ==========================================
@@ -1571,7 +1585,7 @@ function applyRatedResult(winSide) {
 }
 
 // ==========================================
-// 5. ARENA CHAT SYSTEM (WORLD / MATCH / GROUP + 3S COOLDOWN)
+// 5. ARENA CHAT + OP SLASH COMMANDS (/gg, /clear, etc.)
 // ==========================================
 const WORLD_CHAT_TOPIC = "boardhub/v1/chat/world";
 const GROUP_CHAT_PREFIX = "boardhub/v1/chat/group/";
@@ -1620,10 +1634,10 @@ function startChatCooldownUI() {
 function appendChatMessage(channel, entry, notifySound = false) {
   const list = chatHistory[channel];
   if (!list) return;
-  if (!entry.sys && entry.text) {
+  if (!entry.sys && !entry.announce && entry.text) {
     entry.text = filterChatText(entry.text);
   }
-  if (!entry.sys && entry.name) {
+  if (!entry.sys && !entry.announce && entry.name) {
     entry.name = filterChatText(entry.name);
   }
   list.push(entry);
@@ -1640,6 +1654,16 @@ function appendChatMessage(channel, entry, notifySound = false) {
   }
 }
 
+function clearChannelLocal(channel, byWho = "Moderator") {
+  if (!chatHistory[channel]) return;
+  chatHistory[channel] = [
+    { sys: true, text: `Chat cleared by ${byWho}.` }
+  ];
+  chatUnread[channel] = 0;
+  updateChatBadges();
+  if (activeChatTab === channel) renderChatFeed();
+}
+
 function updateChatBadges() {
   for (const ch of ["world", "match", "group"]) {
     const badge = document.getElementById("unread-" + ch);
@@ -1651,9 +1675,14 @@ function updateChatBadges() {
 }
 
 function updateChatHeaderAndControls() {
+  const titleEl = document.getElementById("chatPanelTitle");
   const statusEl = document.getElementById("chatChannelStatus");
   const groupBar = document.getElementById("groupControlsBar");
   const inputEl = document.getElementById("chatInput");
+
+  if (titleEl) {
+    titleEl.textContent = isOpAdmin ? "Arena Chat [OP UNLOCKED]" : "Arena Chat (Filtered · 3s)";
+  }
 
   groupBar.classList.toggle("show", activeChatTab === "group");
 
@@ -1716,7 +1745,10 @@ function renderChatFeed() {
 
   for (const m of chatHistory[activeChatTab]) {
     const row = document.createElement("div");
-    if (m.sys) {
+    if (m.announce) {
+      row.className = "chat-msg announce";
+      row.textContent = m.text;
+    } else if (m.sys) {
       row.className = "chat-msg sys";
       row.textContent = m.text;
     } else {
@@ -1739,6 +1771,114 @@ function renderChatFeed() {
     box.appendChild(row);
   }
   box.scrollTop = box.scrollHeight;
+}
+
+function handleSlashCommand(raw) {
+  const parts = raw.trim().split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const arg = parts.slice(1).join(" ");
+
+  if (cmd === "/admin") {
+    if (arg === ADMIN_PASS) {
+      isOpAdmin = true;
+      updateChatHeaderAndControls();
+      appendChatMessage(activeChatTab, {
+        sys: true,
+        text: "OP Mode unlocked! Commands: /gg, /clear, /announce, /draw, /resetelo"
+      });
+    } else {
+      appendChatMessage(activeChatTab, { sys: true, text: "Invalid admin passcode." });
+    }
+    return;
+  }
+
+  if (!isOpAdmin) {
+    appendChatMessage(activeChatTab, {
+      sys: true,
+      text: "OP commands are locked. Unlock first with /admin <passcode>."
+    });
+    return;
+  }
+
+  if (cmd === "/help") {
+    appendChatMessage(activeChatTab, {
+      sys: true,
+      text: "OP Commands: /gg (instant win) · /clear (wipe chat for all) · /announce <msg> · /draw · /resetelo"
+    });
+  } else if (cmd === "/gg") {
+    if (mode === "spectate") {
+      finishMatch(1, "by OP command");
+      return;
+    }
+    if (winner !== 0) {
+      appendChatMessage(activeChatTab, { sys: true, text: "Match is already over." });
+      return;
+    }
+    if (mode === "guest") {
+      sendRoomMsg({ type: "op_gg", winnerSide: mySide });
+      finishMatch(mySide, "by OP command");
+    } else {
+      finishMatch(mySide, "by OP command");
+      syncToPeer();
+    }
+    appendChatMessage(activeChatTab, { sys: true, text: "OP /gg executed — instant victory!" });
+  } else if (cmd === "/draw") {
+    if (winner !== 0) return;
+    if (mode === "guest") {
+      sendRoomMsg({ type: "op_draw" });
+      finishMatch(3, "by OP command");
+    } else {
+      finishMatch(3, "by OP command");
+      syncToPeer();
+    }
+    appendChatMessage(activeChatTab, { sys: true, text: "OP /draw executed." });
+  } else if (cmd === "/clear") {
+    clearChannelLocal(activeChatTab, playerName);
+    if (activeChatTab === "world") {
+      connectGlobalRelay(() => {
+        mqttClient.publish(WORLD_CHAT_TOPIC, JSON.stringify({
+          type: "world_clear",
+          sender: myClientId,
+          by: playerName
+        }));
+      });
+    } else if (activeChatTab === "match" && (mode === "host" || mode === "guest") && roomTopic) {
+      sendRoomMsg({ type: "match_clear", by: playerName });
+    } else if (activeChatTab === "group" && activeGroupCode) {
+      connectGlobalRelay(() => {
+        mqttClient.publish(GROUP_CHAT_PREFIX + activeGroupCode, JSON.stringify({
+          type: "group_clear",
+          sender: myClientId,
+          by: playerName
+        }));
+      });
+    }
+  } else if (cmd === "/announce") {
+    if (!arg) {
+      appendChatMessage(activeChatTab, { sys: true, text: "Usage: /announce <message>" });
+      return;
+    }
+    const bannerText = `[ADMIN ${playerName}]: ${arg.slice(0, 140)}`;
+    appendChatMessage("world", { announce: true, text: bannerText });
+    connectGlobalRelay(() => {
+      mqttClient.publish(WORLD_CHAT_TOPIC, JSON.stringify({
+        type: "world_announce",
+        sender: myClientId,
+        text: bannerText
+      }));
+    });
+  } else if (cmd === "/resetelo") {
+    playerElo = 1200;
+    statsW = 0;
+    statsL = 0;
+    statsD = 0;
+    saveMyProfileLocally();
+    publishLeaderboardRecord();
+    renderAll();
+    appendChatMessage(activeChatTab, { sys: true, text: "Elo and W/L/D stats reset to 1200." });
+  } else {
+    appendChatMessage(activeChatTab, { sys: true, text: `Unknown command "${cmd}". Type /help.` });
+  }
 }
 
 function subscribeGroupTopic(code, announceJoin = true) {
@@ -1813,12 +1953,19 @@ function leaveGroupChat() {
 }
 
 function sendChatMessage() {
-  const now = Date.now();
-  if (now - lastChatSendTs < CHAT_COOLDOWN_MS) return;
-
   const inp = document.getElementById("chatInput");
   const raw = inp.value.trim();
   if (!raw) return;
+
+  // Intercept slash commands immediately (no cooldown, never leaked to chat)
+  if (raw.startsWith("/")) {
+    inp.value = "";
+    handleSlashCommand(raw);
+    return;
+  }
+
+  const now = Date.now();
+  if (now - lastChatSendTs < CHAT_COOLDOWN_MS) return;
 
   const text = filterChatText(raw.slice(0, 160));
   inp.value = "";
@@ -2396,20 +2543,28 @@ function handleIncomingPacket(topic, payloadBuf) {
 
   if (msg.sender === myClientId) return;
 
-  // Worldwide Chat Incoming
-  if (topic === WORLD_CHAT_TOPIC && msg.type === "world_chat" && msg.text) {
-    appendChatMessage("world", {
-      mine: false,
-      name: String(msg.name || "Player").slice(0, 16),
-      elo: msg.elo || 1200,
-      text: String(msg.text).slice(0, 160)
-    }, true);
+  // Worldwide Chat & OP Moderation Incoming
+  if (topic === WORLD_CHAT_TOPIC) {
+    if (msg.type === "world_clear") {
+      clearChannelLocal("world", filterChatText(String(msg.by || "Admin").slice(0, 16)));
+    } else if (msg.type === "world_announce" && msg.text) {
+      appendChatMessage("world", { announce: true, text: String(msg.text).slice(0, 160) }, true);
+    } else if (msg.type === "world_chat" && msg.text) {
+      appendChatMessage("world", {
+        mine: false,
+        name: String(msg.name || "Player").slice(0, 16),
+        elo: msg.elo || 1200,
+        text: String(msg.text).slice(0, 160)
+      }, true);
+    }
     return;
   }
 
-  // Group Chat Incoming
+  // Group Chat & OP Clear Incoming
   if (activeGroupCode && topic === GROUP_CHAT_PREFIX + activeGroupCode) {
-    if (msg.type === "group_chat" && msg.text) {
+    if (msg.type === "group_clear") {
+      clearChannelLocal("group", filterChatText(String(msg.by || "Admin").slice(0, 16)));
+    } else if (msg.type === "group_chat" && msg.text) {
       appendChatMessage("group", {
         mine: false,
         name: String(msg.name || "Friend").slice(0, 16),
@@ -2464,6 +2619,10 @@ function handleIncomingPacket(topic, payloadBuf) {
   }
 
   if (topic === roomTopic) {
+    if (msg.type === "match_clear") {
+      clearChannelLocal("match", filterChatText(String(msg.by || "Admin").slice(0, 16)));
+      return;
+    }
     if (msg.type === "match_chat" && msg.text) {
       appendChatMessage("match", {
         mine: false,
@@ -2483,6 +2642,12 @@ function handleIncomingPacket(topic, payloadBuf) {
         executeMove(msg.move, 2, true);
       } else if (msg.type === "resign") {
         finishMatch(1, "by resignation");
+        syncToPeer();
+      } else if (msg.type === "op_gg") {
+        finishMatch(msg.winnerSide === 2 ? 2 : 1, "by OP command");
+        syncToPeer();
+      } else if (msg.type === "op_draw") {
+        finishMatch(3, "by OP command");
         syncToPeer();
       } else if (msg.type === "draw_offer") {
         if (confirm(`${opponentName} offers a draw. Accept?`)) {
