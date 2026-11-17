@@ -1594,7 +1594,7 @@ function applyRatedResult(winSide) {
 }
 
 // ==========================================
-// 5. ARENA CHAT + OP SLASH COMMANDS (/gg, /clear, etc.)
+// 5. ARENA CHAT + OP SLASH COMMANDS
 // ==========================================
 const WORLD_CHAT_TOPIC = "boardhub/v1/chat/world";
 const GROUP_CHAT_PREFIX = "boardhub/v1/chat/group/";
@@ -1793,7 +1793,7 @@ function handleSlashCommand(raw) {
       updateChatHeaderAndControls();
       appendChatMessage(activeChatTab, {
         sys: true,
-        text: "OP Mode unlocked! Commands: /gg, /clear, /announce, /draw, /resetelo"
+        text: "OP Mode unlocked! Commands: /gg, /clear, /clearlb, /kicklb, /announce, /draw, /resetelo"
       });
     } else {
       appendChatMessage(activeChatTab, { sys: true, text: "Invalid admin passcode." });
@@ -1812,7 +1812,7 @@ function handleSlashCommand(raw) {
   if (cmd === "/help") {
     appendChatMessage(activeChatTab, {
       sys: true,
-      text: "OP Commands: /gg (instant win) · /clear (wipe chat for all) · /announce <msg> · /draw · /resetelo"
+      text: "OP Commands: /gg · /clear · /clearlb · /kicklb <name> · /announce <msg> · /draw · /resetelo"
     });
   } else if (cmd === "/gg") {
     if (mode === "spectate") {
@@ -1885,39 +1885,42 @@ function handleSlashCommand(raw) {
     publishLeaderboardRecord();
     renderAll();
     appendChatMessage(activeChatTab, { sys: true, text: "Elo and W/L/D stats reset to 1200." });
+  } else if (cmd === "/clearlb") {
+    for (const id of leaderboardMap.keys()) {
+      if (id !== deviceId && mqttClient && mqttClient.connected) {
+        mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
+        setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
+      }
+    }
+    leaderboardMap.clear();
+    localStorage.removeItem("bh_lb_cache");
+    saveMyProfileLocally();
+    publishLeaderboardRecord();
+    appendChatMessage(activeChatTab, { sys: true, text: "Leaderboard wiped clean!" });
+  } else if (cmd === "/kicklb") {
+    if (!arg) {
+      appendChatMessage(activeChatTab, { sys: true, text: "Usage: /kicklb <player_name>" });
+      return;
+    }
+    const target = arg.toLowerCase();
+    let removed = 0;
+    for (const [id, entry] of leaderboardMap.entries()) {
+      if (id !== deviceId && String(entry.name || "").toLowerCase() === target) {
+        leaderboardMap.delete(id);
+        if (mqttClient && mqttClient.connected) {
+          mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
+          setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
+        }
+        removed++;
+      }
+    }
+    saveLeaderboardCache();
+    renderLeaderboard();
+    appendChatMessage(activeChatTab, { sys: true, text: `Removed ${removed} entry(s) matching "${arg}".` });
   } else {
     appendChatMessage(activeChatTab, { sys: true, text: `Unknown command "${cmd}". Type /help.` });
   }
 }
-} else if (cmd === "/clearlb") {
-  for (const id of leaderboardMap.keys()) {
-    if (id !== deviceId && mqttClient && mqttClient.connected) {
-      mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
-      setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
-    }
-  }
-  leaderboardMap.clear();
-  localStorage.removeItem("bh_lb_cache");
-  saveMyProfileLocally();
-  publishLeaderboardRecord();
-  appendChatMessage(activeChatTab, { sys: true, text: "Leaderboard wiped clean!" });
-} else if (cmd === "/kicklb") {
-  const target = arg.toLowerCase();
-  let removed = 0;
-  for (const [id, entry] of leaderboardMap.entries()) {
-    if (id !== deviceId && String(entry.name || "").toLowerCase() === target) {
-      leaderboardMap.delete(id);
-      if (mqttClient && mqttClient.connected) {
-        mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
-        setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
-      }
-      removed++;
-    }
-  }
-  saveLeaderboardCache();
-  renderLeaderboard();
-  appendChatMessage(activeChatTab, { sys: true, text: `Removed removedentry(s)matching"{arg}".` });
-
 
 function subscribeGroupTopic(code, announceJoin = true) {
   if (!code || !mqttClient || !mqttClient.connected) return;
@@ -2519,26 +2522,49 @@ function joinFriendRoom() {
 }
 
 function handleIncomingPacket(topic, payloadBuf) {
-  let msg;
-  try {
-    msg = JSON.parse(payloadBuf.toString());
-  } catch (e) {
-    return;
-  }
-  if (!msg) return;
+  const rawStr = payloadBuf ? payloadBuf.toString() : "";
 
   if (topic.startsWith(LB_PLAYER_PREFIX)) {
-    if (msg.id && msg.name) {
-      if (msg.id === deviceId) return;
-      const prev = leaderboardMap.get(msg.id);
-      if (!prev || (msg.updated || 0) >= (prev.updated || 0)) {
-        leaderboardMap.set(msg.id, msg);
+    const targetId = topic.slice(LB_PLAYER_PREFIX.length);
+    if (!rawStr) {
+      if (targetId && leaderboardMap.delete(targetId)) {
+        saveLeaderboardCache();
+        renderLeaderboard();
+      }
+      return;
+    }
+    let lbMsg;
+    try {
+      lbMsg = JSON.parse(rawStr);
+    } catch (e) {
+      return;
+    }
+    if (!lbMsg || lbMsg.deleted) {
+      if (targetId && leaderboardMap.delete(targetId)) {
+        saveLeaderboardCache();
+        renderLeaderboard();
+      }
+      return;
+    }
+    if (lbMsg.id && lbMsg.name) {
+      if (lbMsg.id === deviceId) return;
+      const prev = leaderboardMap.get(lbMsg.id);
+      if (!prev || (lbMsg.updated || 0) >= (prev.updated || 0)) {
+        leaderboardMap.set(lbMsg.id, lbMsg);
         saveLeaderboardCache();
         renderLeaderboard();
       }
     }
     return;
   }
+
+  let msg;
+  try {
+    msg = JSON.parse(rawStr);
+  } catch (e) {
+    return;
+  }
+  if (!msg) return;
 
   if (topic === PICO_STATUS_TOPIC) {
     lastPicoSeen = Date.now();
@@ -3360,14 +3386,9 @@ function onCheckersSquareClick(r, c, v) {
 
 startLocalBot();
 </script>
-<footer style="max-width:860px;text-align:center;color:#64748b;font-size:12px;padding:18px 16px 28px;">
-  <strong>BoardHub Arena</strong> — Free multiplayer online Chess, Checkers, and Connect 4. Play instant browser matches against friends, Stockfish AI, or a Raspberry Pi Pico 2 W.
-</footer>
 <footer style="max-width:860px;text-align:center;color:#64748b;font-size:12px;padding:16px 16px 28px;line-height:1.5;">
   <strong>BoardHub Arena</strong> — Free online Chess, Checkers, and Connect 4.<br>
   <strong>Privacy & Rules:</strong> No tracking cookies are used; stats and themes are saved locally on your device. Chat messages and leaderboard stats are public—please keep chat respectful and never share personal information.
 </footer>
 </body>
 </html>
-
-
