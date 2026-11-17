@@ -1,6 +1,3510 @@
 <!DOCTYPE html>
 <html lang="en">
+<head<!DOCTYPE html>
+<html lang="en">
 <head>
+  <meta name="description" content="Play free online Chess, Checkers, and Connect 4 in your browser on BoardHub Arena. Challenge friends with room codes, battle Stockfish AI, or spectate live bot matches." />
+  <meta name="keywords" content="BoardHub Arena, online chess, online checkers, connect 4 multiplayer, browser board games, Stockfish chess" />
+  <link rel="canonical" href="https://isaacdasigma.github.io/online-board-games/" />
+
+  <!-- Social & Search Preview Cards -->
+  <meta property="og:title" content="BoardHub Arena — Free Online Chess, Checkers & Connect 4" />
+  <meta property="og:description" content="Instant browser multiplayer for Chess, Checkers, and Connect 4 with live chat, Elo leaderboards, and Stockfish bots." />
+  <meta property="og:url" content="https://isaacdasigma.github.io/online-board-games/" />
+  <meta property="og:type" content="website" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BoardHub — Multiplayer Tabletop Arena</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #131a2a;
+      --card-alt: #1b2438;
+      --border: #26324d;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --primary: #6366f1;
+      --cyan: #0ea5e9;
+      --sq-light: #e2e8f0;
+      --sq-dark: #4f6d9a;
+      --sq-last: rgba(56, 189, 248, 0.42);
+      --sq-sel: rgba(129, 140, 248, 0.65);
+      --c4-frame: #262b5c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top, #151f38 0%, var(--bg) 65%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* TOP NAVIGATION BAR */
+    header {
+      width: 100%;
+      background: rgba(19, 26, 42, 0.85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: center;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .nav-inner {
+      max-width: 1160px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 19px;
+      letter-spacing: -0.4px;
+    }
+    .logo-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary), var(--cyan));
+      display: grid; grid-template-columns: 1fr 1fr; padding: 5px; gap: 2px;
+    }
+    .logo-icon span { background: rgba(255,255,255,0.9); border-radius: 2px; }
+    .logo-icon span:nth-child(2), .logo-icon span:nth-child(3) { background: rgba(255,255,255,0.3); }
+
+    .game-tabs {
+      display: flex;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      gap: 4px;
+    }
+    .tab-btn {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 7px 14px;
+      border-radius: 7px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      background: var(--card-alt);
+      color: #38bdf8;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+
+    .pills { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 5px 10px;
+      border-radius: 999px; background: var(--card-alt);
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .pill.online { background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399; }
+    .pill.pico-on { background: rgba(56, 189, 248, 0.15); border-color: #38bdf8; color: #7dd3fc; }
+    .pill.music-btn { cursor: pointer; transition: 0.15s; font-family: inherit; }
+    .pill.music-btn:hover { border-color: #c084fc; color: #e9d5ff; }
+    .pill.music-on {
+      background: rgba(168, 85, 247, 0.2);
+      border-color: #c084fc;
+      color: #f3e8ff;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+    }
+    .pill.profile { color: #f8fafc; border-color: #334155; }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #10b981; box-shadow: 0 0 6px #10b981;
+    }
+    .set-name-btn {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .set-name-btn:hover { filter: brightness(1.15); }
+
+    /* MAIN ARENA LAYOUT */
+    .arena {
+      max-width: 1160px;
+      width: 100%;
+      padding: 20px 16px;
+      display: grid;
+      grid-template-columns: minmax(300px, 500px) minmax(300px, 420px);
+      gap: 24px;
+      justify-content: center;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .arena { grid-template-columns: minmax(290px, 500px); }
+    }
+
+    /* BOARD COLUMN */
+    .board-section { display: flex; flex-direction: column; gap: 10px; }
+    .player-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+    .p-meta { display: flex; align-items: center; gap: 10px; }
+    .badge-side {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: var(--card-alt); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 12px; color: #38bdf8;
+    }
+    .p-title-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .p-title { font-weight: 700; font-size: 14px; }
+    .elo-tag {
+      font-size: 11px; font-weight: 800; padding: 1px 6px;
+      border-radius: 5px; background: var(--bg);
+      border: 1px solid var(--border); color: #38bdf8;
+    }
+    .cap-row {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 1px;
+      font-size: 12px; font-weight: 700; color: var(--muted); min-height: 18px;
+    }
+    .cap-icon { width: 15px; height: 15px; display: inline-block; }
+
+    .timer {
+      background: var(--bg);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 19px;
+      font-weight: 800;
+      padding: 6px 12px;
+      border-radius: 8px;
+      min-width: 84px;
+      text-align: center;
+    }
+    .timer.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+    .timer.low {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: #f43f5e;
+      color: #fda4af;
+    }
+
+    .board-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      padding: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    #board {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      border-radius: 9px;
+      overflow: hidden;
+      user-select: none;
+    }
+    .sq {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      transition: background-color 0.2s;
+    }
+    .sq.light { background: var(--sq-light); }
+    .sq.dark { background: var(--sq-dark); }
+    .sq.last::before, .sq.sel::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+    }
+    .sq.last::before { background: var(--sq-last); }
+    .sq.sel::before { background: var(--sq-sel); }
+    .sq.check { background: radial-gradient(circle, #f43f5e 25%, #9f1239 85%) !important; }
+
+    .dot {
+      width: 28%; height: 28%; border-radius: 50%;
+      background: rgba(15, 23, 42, 0.28); pointer-events: none; z-index: 2;
+    }
+    .ring {
+      position: absolute; inset: 8%; border-radius: 50%;
+      border: 4px solid rgba(15, 23, 42, 0.32); pointer-events: none; z-index: 2;
+    }
+    .coord {
+      position: absolute; font-size: 10px; font-weight: 800; pointer-events: none; opacity: 0.85;
+    }
+    .coord.rank { top: 2px; left: 4px; }
+    .coord.file { bottom: 2px; right: 4px; }
+    .light .coord { color: var(--sq-dark); }
+    .dark .coord { color: var(--sq-light); }
+
+    .piece-svg {
+      width: 78%;
+      height: 78%;
+      display: block;
+      z-index: 1;
+      pointer-events: none;
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+    }
+
+    .chk-disc {
+      width: 75%; height: 75%; border-radius: 50%; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 15px;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.45), inset 0 2px 3px rgba(255,255,255,0.35);
+    }
+    .chk-disc.p1 { background: #f43f5e; color: #fff1f2; border: 3px solid #be123c; }
+    .chk-disc.p2 { background: #fbbf24; color: #1e293b; border: 3px solid #d97706; }
+
+    .c4-sq {
+      background: var(--c4-frame); padding: 6px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; min-width: 0; min-height: 0; overflow: hidden;
+      transition: background-color 0.2s;
+    }
+    .c4-hole { width: 100%; height: 100%; border-radius: 50%; background: var(--bg); box-shadow: inset 0 3px 6px rgba(0,0,0,0.7); }
+    .c4-hole.p1 { background: #f43f5e; }
+    .c4-hole.p2 { background: #fbbf24; }
+
+    #promoModal {
+      display: none; position: absolute; inset: 0; background: rgba(11, 15, 25, 0.75);
+      align-items: center; justify-content: center; z-index: 10; border-radius: 14px;
+    }
+    .promo-box {
+      background: var(--card); border: 1px solid var(--border);
+      padding: 14px; border-radius: 12px; display: flex; gap: 10px;
+    }
+    .promo-btn {
+      width: 54px; height: 54px; padding: 6px; background: var(--card-alt);
+      border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .promo-btn:hover { border-color: #38bdf8; }
+
+    /* RIGHT CONTROL DOCK */
+    .dock { display: flex; flex-direction: column; gap: 14px; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .panel-label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted);
+    }
+    .field-lbl {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      margin-bottom: 3px; display: block;
+    }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    select, input, button.btn {
+      font-family: inherit; font-size: 13px; font-weight: 700;
+      border-radius: 9px; padding: 9px 10px;
+      border: 1px solid var(--border); width: 100%;
+    }
+    select, input { background: var(--bg); color: var(--text); }
+    input { text-align: center; }
+    button.btn { background: var(--card-alt); color: var(--text); cursor: pointer; transition: 0.15s; }
+    button.btn:hover { border-color: #38bdf8; }
+    button.btn.cta {
+      background: linear-gradient(135deg, var(--primary), var(--cyan));
+      border: none; color: #ffffff; font-size: 14px; padding: 11px;
+    }
+    button.btn.cta:hover { filter: brightness(1.1); }
+    button.btn.spectate-active {
+      border-color: #fbbf24;
+      color: #fbbf24;
+    }
+    button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .status-pill {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 10px;
+      border-radius: 9px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 13px;
+      color: #38bdf8;
+    }
+    .history {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      height: 92px;
+      overflow-y: auto;
+      padding: 8px;
+      font-size: 13px;
+      font-family: ui-monospace, monospace;
+    }
+    .m-row { display: grid; grid-template-columns: 36px 1fr 1fr; padding: 3px 6px; border-radius: 4px; }
+    .m-row:nth-child(even) { background: rgba(255,255,255,0.03); }
+    .m-idx { color: var(--muted); }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+    /* ARENA CHAT PANEL (WORLD / MATCH / GROUP) */
+    .chat-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      background: var(--bg);
+      padding: 3px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      gap: 4px;
+    }
+    .chat-tab {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 6px 4px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: 0.15s;
+    }
+    .chat-tab:hover { color: var(--text); }
+    .chat-tab.active {
+      background: var(--card-alt);
+      color: #38bdf8;
+    }
+    .unread-badge {
+      display: none;
+      background: #f43f5e;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 999px;
+      line-height: 1.2;
+    }
+    .unread-badge.show { display: inline-block; }
+
+    .group-bar {
+      display: none;
+      gap: 6px;
+      align-items: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 6px;
+      border-radius: 9px;
+    }
+    .group-bar.show { display: flex; }
+    .group-bar input {
+      padding: 6px 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      width: 78px;
+    }
+    .group-bar button.btn {
+      padding: 6px 9px;
+      font-size: 11px;
+      width: auto;
+      white-space: nowrap;
+    }
+    .group-tag {
+      font-size: 11px;
+      font-weight: 800;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid #10b981;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    .chat-feed {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      height: 150px;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12.5px;
+    }
+    .chat-msg {
+      line-height: 1.38;
+      word-break: break-word;
+      padding: 4px 7px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .chat-msg.mine {
+      background: rgba(99, 102, 241, 0.16);
+      border-left: 2px solid #818cf8;
+    }
+    .chat-msg.sys {
+      background: transparent;
+      color: var(--muted);
+      font-style: italic;
+      font-size: 11.5px;
+      text-align: center;
+      padding: 2px 4px;
+    }
+    .chat-msg.announce {
+      background: rgba(251, 191, 36, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      color: #fbbf24;
+      font-weight: 700;
+      text-align: center;
+      font-size: 12px;
+    }
+    .chat-sender {
+      font-weight: 800;
+      color: #38bdf8;
+      margin-right: 4px;
+    }
+    .chat-msg.mine .chat-sender { color: #a5b4fc; }
+    .chat-elo {
+      font-size: 10.5px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-right: 5px;
+    }
+    .chat-compose {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+    }
+    .chat-compose input {
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .chat-compose button.btn {
+      width: auto;
+      min-width: 62px;
+      padding: 8px 12px;
+      background: var(--primary);
+      border: none;
+      color: #ffffff;
+    }
+
+    /* LEADERBOARD */
+    .lb-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      max-height: 145px;
+      overflow-y: auto;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .lb-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .lb-row.me {
+      background: rgba(99, 102, 241, 0.16);
+      border: 1px solid rgba(99, 102, 241, 0.45);
+    }
+    .lb-rank { font-weight: 800; color: var(--muted); }
+    .lb-rank.top1 { color: #fbbf24; }
+    .lb-rank.top2 { color: #e2e8f0; }
+    .lb-rank.top3 { color: #d97706; }
+    .lb-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lb-wld { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
+    .lb-elo {
+      font-weight: 800;
+      color: #38bdf8;
+      font-family: ui-monospace, monospace;
+      background: var(--card);
+      padding: 2px 6px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+    }
+
+    /* ONE-TIME NICKNAME MODAL */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 10, 18, 0.82);
+      backdrop-filter: blur(4px);
+      z-index: 50;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      max-width: 370px;
+      width: 100%;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6);
+    }
+    .modal-title { font-size: 17px; font-weight: 800; }
+    .modal-desc { font-size: 13px; color: var(--muted); line-height: 1.45; }
+    .modal-warn {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      padding: 8px 10px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="nav-inner">
+    <div class="logo">
+      <div class="logo-icon"><span></span><span></span><span></span><span></span></div>
+      <span>BoardHub</span>
+    </div>
+
+    <div class="game-tabs">
+      <button class="tab-btn active" id="tab-chess" onclick="selectGame('chess')">Chess</button>
+      <button class="tab-btn" id="tab-checkers" onclick="selectGame('checkers')">Checkers</button>
+      <button class="tab-btn" id="tab-c4" onclick="selectGame('c4')">Connect 4</button>
+    </div>
+
+    <div class="pills">
+      <button class="pill music-btn" id="musicToggleBtn" onclick="toggleLobbyMusic()">Music: Off</button>
+      <button class="pill music-btn" onclick="document.getElementById('midiFileInput').click()">Upload MIDI</button>
+      <input type="file" id="midiFileInput" accept=".mid,.midi" style="display:none" onchange="handleMidiUpload(this)" />
+      <span class="pill online"><span class="live-dot"></span><span id="onlineCountText">1 Online</span></span>
+      <span class="pill" id="picoStatusBadge">Pico: Offline</span>
+      <span class="pill" id="netBadge">Connecting...</span>
+      <span class="pill profile" id="profileBadge">
+        <span id="headerNameText">guest_0000 (1200)</span>
+        <button class="set-name-btn" id="headerSetNameBtn" onclick="openNicknameModal()">Set Name</button>
+      </span>
+    </div>
+  </div>
+</header>
+
+<div class="arena">
+  <!-- LEFT: GAME BOARD -->
+  <div class="board-section">
+    <div class="player-strip">
+      <div class="p-meta">
+        <div class="badge-side" id="topAvatar">P2</div>
+        <div>
+          <div class="p-title-row">
+            <span class="p-title" id="topName">Opponent</span>
+            <span class="elo-tag" id="topElo">1200</span>
+          </div>
+          <div class="cap-row" id="topCap"></div>
+        </div>
+      </div>
+      <div class="timer" id="topClock">03:00</div>
+    </div>
+
+    <div class="board-frame">
+      <div id="board"></div>
+      <div id="promoModal">
+        <div class="promo-box" id="promoChoices"></div>
+      </div>
+    </div>
+
+    <div class="player-strip">
+      <div class="p-meta">
+        <div class="badge-side" id="botAvatar">P1</div>
+        <div>
+          <div class="p-title-row">
+            <span class="p-title" id="botName">You</span>
+            <span class="elo-tag" id="botElo">1200</span>
+            <button class="set-name-btn" id="stripSetNameBtn" onclick="openNicknameModal()">Set Name</button>
+          </div>
+          <div class="cap-row" id="botCap"></div>
+        </div>
+      </div>
+      <div class="timer active" id="botClock">03:00</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: MATCHMAKING, CHAT & LEADERBOARD -->
+  <div class="dock">
+    <div class="panel">
+      <div class="panel-label">
+        <span>Bot & Board Setup</span>
+        <span id="engineBadge" style="color:#38bdf8;">Engine: Loading...</span>
+      </div>
+
+      <div class="row-2">
+        <div>
+          <span class="field-lbl">Bot 1 (Opponent / White)</span>
+          <select id="bot1Select">
+            <option value="1">Casual (1000)</option>
+            <option value="2">Club (1400)</option>
+            <option value="3" selected>Master (1800)</option>
+            <option value="4">Stockfish GM (2400)</option>
+            <option value="pico">Pico 2 W (1150)</option>
+          </select>
+        </div>
+        <div>
+          <span class="field-lbl">Bot 2 (Spectate Black)</span>
+          <select id="bot2Select">
+            <option value="1" selected>Casual (1000)</option>
+            <option value="2">Club (1400)</option>
+            <option value="3">Master (1800)</option>
+            <option value="4">Stockfish GM (2400)</option>
+            <option value="pico">Pico 2 W (1150)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row-2">
+        <button class="btn" onclick="startLocalBot()">Play vs Bot 1</button>
+        <button class="btn" id="btnSpectate" onclick="startSpectateBots()">Spectate Bot 1 vs 2</button>
+      </div>
+
+      <div class="row-2">
+        <div>
+          <span class="field-lbl">Board Theme</span>
+          <select id="boardThemeSelect" onchange="applyBoardTheme(this.value)">
+            <option value="slate">Classic Slate</option>
+            <option value="darkworld">Dark World (Deltarune)</option>
+            <option value="emerald">Tournament Emerald</option>
+            <option value="walnut">Walnut Wood</option>
+            <option value="obsidian">Obsidian Midnight</option>
+            <option value="crimson">Scarlet Crimson</option>
+          </select>
+        </div>
+        <div>
+          <span class="field-lbl">Lobby Music Track</span>
+          <select id="musicTrackSelect" onchange="switchMusicTrack(this.value)">
+            <option value="deltarune">Deltarune Synth</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row-2">
+        <select id="timeSelect">
+          <option value="180">3 min Blitz</option>
+          <option value="60">1 min Bullet</option>
+          <option value="600">10 min Rapid</option>
+          <option value="0">Untimed</option>
+        </select>
+        <button class="btn cta" id="btnQuick" onclick="findQuickMatch()">Find Online Match</button>
+      </div>
+
+      <div class="row-2">
+        <button class="btn" onclick="hostFriendRoom()">Create Room</button>
+        <div style="display:flex; gap:6px;">
+          <input id="codeInput" placeholder="Code" maxlength="4" />
+          <button class="btn" onclick="joinFriendRoom()">Join</button>
+        </div>
+      </div>
+
+      <div class="status-pill" id="statusBanner">Ready to play</div>
+    </div>
+
+    <!-- ARENA CHAT: WORLD / MATCH OPPONENT / GROUP CHAT -->
+    <div class="panel">
+      <div class="panel-label">
+        <span id="chatPanelTitle">Arena Chat (Filtered · 3s)</span>
+        <span id="chatChannelStatus" style="color:#38bdf8;">Worldwide Lobby</span>
+      </div>
+
+      <div class="chat-tabs">
+        <button class="chat-tab active" id="chat-tab-world" onclick="switchChatTab('world')">
+          World <span class="unread-badge" id="unread-world">0</span>
+        </button>
+        <button class="chat-tab" id="chat-tab-match" onclick="switchChatTab('match')">
+          Opponent <span class="unread-badge" id="unread-match">0</span>
+        </button>
+        <button class="chat-tab" id="chat-tab-group" onclick="switchChatTab('group')">
+          Group <span class="unread-badge" id="unread-group">0</span>
+        </button>
+      </div>
+
+      <div class="group-bar" id="groupControlsBar">
+        <span class="group-tag" id="activeGroupLabel" style="display:none;">Group: ----</span>
+        <button class="btn" id="btnCreateGroup" onclick="createGroupChat()">New Group</button>
+        <input id="groupCodeInput" placeholder="Code" maxlength="4" onkeydown="if(event.key==='Enter') joinGroupChat()" />
+        <button class="btn" id="btnJoinGroup" onclick="joinGroupChat()">Join</button>
+        <button class="btn" id="btnLeaveGroup" onclick="leaveGroupChat()" style="display:none;">Leave</button>
+      </div>
+
+      <div class="chat-feed" id="chatFeed"></div>
+
+      <div class="chat-compose">
+        <input id="chatInput" placeholder="Say something to the world..." maxlength="160" onkeydown="if(event.key==='Enter') sendChatMessage()" />
+        <button class="btn" id="btnSendChat" onclick="sendChatMessage()">Send</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">Move Log & Controls</div>
+      <div class="history" id="movesBox"></div>
+      <div class="row-3">
+        <button class="btn" id="btnDraw" onclick="offerDraw()" disabled>Draw</button>
+        <button class="btn" id="btnResign" onclick="resignGame()" disabled>Resign</button>
+        <button class="btn" id="btnRematch" onclick="requestRematch()" disabled>Rematch</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">
+        <span>Live Leaderboard</span>
+        <span id="lbCountLabel" style="color:#38bdf8;">Top Players</span>
+      </div>
+      <div class="lb-list" id="leaderboardList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ONE-TIME NICKNAME MODAL -->
+<div class="modal-backdrop" id="nicknameModal">
+  <div class="modal-card">
+    <div class="modal-title">Set Permanent Nickname</div>
+    <div class="modal-desc">Pick your custom player name for matches, chat, and the live leaderboard (2–14 letters or numbers).</div>
+    <div class="modal-warn">Warning: You can only set your nickname ONCE on this device.</div>
+    <input id="nicknameInput" placeholder="Enter nickname..." maxlength="14" onkeydown="if(event.key==='Enter') confirmNickname()" />
+    <div class="row-2">
+      <button class="btn" onclick="closeNicknameModal()">Cancel</button>
+      <button class="btn cta" onclick="confirmNickname()">Lock In Name</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// 0. SECRET OP ADMIN PASSWORD (CHANGE THIS!)
+// ==========================================
+const ADMIN_PASS = "2026";
+let isOpAdmin = false;
+
+// ==========================================
+// 1. CUSTOM BOARD THEMES
+// ==========================================
+const BOARD_THEMES = {
+  slate: {
+    light: "#e2e8f0",
+    dark: "#4f6d9a",
+    last: "rgba(56, 189, 248, 0.42)",
+    sel: "rgba(129, 140, 248, 0.65)",
+    c4: "#262b5c"
+  },
+  darkworld: {
+    light: "#ddd6fe",
+    dark: "#3b0764",
+    last: "rgba(236, 72, 153, 0.45)",
+    sel: "rgba(34, 211, 238, 0.65)",
+    c4: "#2e1065"
+  },
+  emerald: {
+    light: "#eeeed2",
+    dark: "#769656",
+    last: "rgba(246, 246, 105, 0.55)",
+    sel: "rgba(186, 202, 68, 0.72)",
+    c4: "#14532d"
+  },
+  walnut: {
+    light: "#f0d9b5",
+    dark: "#b58863",
+    last: "rgba(205, 210, 106, 0.55)",
+    sel: "rgba(245, 158, 11, 0.55)",
+    c4: "#5c3a21"
+  },
+  obsidian: {
+    light: "#64748b",
+    dark: "#1e293b",
+    last: "rgba(56, 189, 248, 0.38)",
+    sel: "rgba(99, 102, 241, 0.6)",
+    c4: "#0f172a"
+  },
+  crimson: {
+    light: "#fde8e8",
+    dark: "#991b1b",
+    last: "rgba(251, 191, 36, 0.45)",
+    sel: "rgba(244, 63, 94, 0.65)",
+    c4: "#450a0a"
+  }
+};
+
+function applyBoardTheme(themeKey) {
+  const t = BOARD_THEMES[themeKey] || BOARD_THEMES.slate;
+  const root = document.documentElement.style;
+  root.setProperty("--sq-light", t.light);
+  root.setProperty("--sq-dark", t.dark);
+  root.setProperty("--sq-last", t.last);
+  root.setProperty("--sq-sel", t.sel);
+  root.setProperty("--c4-frame", t.c4);
+  localStorage.setItem("bh_board_theme", themeKey);
+  const sel = document.getElementById("boardThemeSelect");
+  if (sel) sel.value = themeKey;
+}
+
+applyBoardTheme(localStorage.getItem("bh_board_theme") || "slate");
+
+// ==========================================
+// 2. SOUND ENGINE, DELTARUNE SYNTH & MIDI PLAYER
+// ==========================================
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const musicBus = audioCtx.createDynamicsCompressor();
+musicBus.threshold.value = -16;
+musicBus.ratio.value = 6;
+musicBus.connect(audioCtx.destination);
+
+function playSound(type) {
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+
+  if (type === "move") {
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.exponentialRampToValueAtTime(65, now + 0.08);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    osc.start(now); osc.stop(now + 0.08);
+  } else if (type === "capture") {
+    osc.type = "square";
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(55, now + 0.11);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
+    osc.start(now); osc.stop(now + 0.11);
+  } else if (type === "check") {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.setValueAtTime(390, now + 0.09);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    osc.start(now); osc.stop(now + 0.2);
+  } else if (type === "end") {
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(330, now);
+    osc.frequency.setValueAtTime(440, now + 0.12);
+    osc.frequency.setValueAtTime(554, now + 0.24);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+    osc.start(now); osc.stop(now + 0.45);
+  } else if (type === "chat") {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(580, now);
+    osc.frequency.exponentialRampToValueAtTime(760, now + 0.06);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.005, now + 0.07);
+    osc.start(now); osc.stop(now + 0.07);
+  }
+}
+
+function midiToFreq(m) {
+  return 440 * Math.pow(2, (m - 69) / 12);
+}
+
+let musicPlaying = false;
+let selectedMusicTrack = localStorage.getItem("bh_music_track") || "deltarune";
+let synthTimer = null;
+let synthStep = 0;
+
+const DR_LEAD = [
+  77,  0, 74, 77, 81,  0, 79, 77,
+  76,  0, 72, 76, 79,  0, 77, 76,
+  74,  0, 69, 72, 74, 76, 77,  0,
+  72,  0, 74,  0, 76,  0, 77, 79,
+  81,  0, 79, 77, 74,  0, 77,  0,
+  79,  0, 76, 72, 75,  0, 78,  0,
+  79,  0, 77, 74, 70,  0, 72, 74,
+  77,  0, 76,  0, 72,  0,  0,  0
+];
+
+const DR_ARP = [
+  58, 62, 65, 69, 70, 69, 65, 62,
+  57, 60, 64, 67, 69, 67, 64, 60,
+  50, 53, 57, 60, 62, 60, 57, 53,
+  55, 60, 65, 69, 67, 65, 60, 55,
+  58, 62, 65, 69, 70, 69, 65, 62,
+  57, 60, 64, 67, 66, 63, 60, 57,
+  55, 58, 62, 65, 67, 65, 62, 58,
+  53, 58, 60, 65, 52, 58, 60, 64
+];
+
+const DR_BASS = [
+  46,  0, 53,  0, 46,  0, 53,  0,
+  45,  0, 52,  0, 45,  0, 52,  0,
+  38,  0, 45,  0, 38,  0, 45,  0,
+  48,  0, 43,  0, 48,  0, 55,  0,
+  46,  0, 53,  0, 46,  0, 53,  0,
+  45,  0, 52,  0, 50,  0, 45,  0,
+  43,  0, 50,  0, 43,  0, 50,  0,
+  48,  0, 55,  0, 48,  0, 52,  0
+];
+
+function scheduleSynthNote(when, midi, waveType, peakGain, duration) {
+  if (!midi) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = waveType;
+  osc.frequency.setValueAtTime(midiToFreq(midi), when);
+
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.linearRampToValueAtTime(peakGain, when + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+
+  osc.connect(gain);
+  gain.connect(musicBus);
+  osc.start(when);
+  osc.stop(when + duration + 0.02);
+}
+
+function stepDeltaruneSynth() {
+  if (!musicPlaying || selectedMusicTrack !== "deltarune") return;
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  const now = audioCtx.currentTime;
+  const idx = synthStep % 64;
+  scheduleSynthNote(now, DR_LEAD[idx], "triangle", 0.08, 0.48);
+  scheduleSynthNote(now, DR_ARP[idx], "square", 0.022, 0.22);
+  scheduleSynthNote(now, DR_BASS[idx], "sine", 0.1, 0.42);
+  synthStep++;
+}
+
+let customMidiData = null;
+let midiSchedulerTimer = null;
+let midiStartCtxTime = 0;
+let midiNextNoteIdx = 0;
+let midiLoopCount = 0;
+
+function readVLQ(view, st) {
+  let val = 0;
+  while (st.pos < view.byteLength) {
+    const b = view.getUint8(st.pos++);
+    val = (val << 7) | (b & 0x7f);
+    if ((b & 0x80) === 0) break;
+  }
+  return val;
+}
+
+function parseStandardMidi(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 14 || view.getUint32(0) !== 0x4d546864) {
+    throw new Error("Invalid MIDI file header (MThd missing).");
+  }
+  const hdrLen = view.getUint32(4);
+  const numTracks = view.getUint16(10);
+  const rawDiv = view.getInt16(12);
+  const tpqn = rawDiv > 0 ? rawDiv : 480;
+
+  let pos = 8 + hdrLen;
+  const rawEvents = [];
+
+  for (let t = 0; t < numTracks && pos + 8 <= view.byteLength; t++) {
+    const chunkId = view.getUint32(pos);
+    const chunkLen = view.getUint32(pos + 4);
+    pos += 8;
+    const trackEnd = Math.min(view.byteLength, pos + chunkLen);
+
+    if (chunkId !== 0x4d54726b) {
+      pos = trackEnd;
+      continue;
+    }
+
+    const st = { pos };
+    let absTick = 0;
+    let runningStatus = 0;
+
+    while (st.pos < trackEnd) {
+      absTick += readVLQ(view, st);
+      if (st.pos >= trackEnd) break;
+
+      let status = view.getUint8(st.pos);
+      if (status < 0x80) {
+        status = runningStatus;
+      } else {
+        st.pos++;
+        if (status < 0xf0) runningStatus = status;
+      }
+
+      if (status === 0xff) {
+        if (st.pos >= trackEnd) break;
+        const metaType = view.getUint8(st.pos++);
+        const metaLen = readVLQ(view, st);
+        if (metaType === 0x51 && metaLen === 3 && st.pos + 3 <= trackEnd) {
+          const usPerBeat =
+            (view.getUint8(st.pos) << 16) |
+            (view.getUint8(st.pos + 1) << 8) |
+            view.getUint8(st.pos + 2);
+          rawEvents.push({ tick: absTick, order: 0, type: "tempo", usPerBeat });
+        }
+        st.pos += metaLen;
+      } else if (status === 0xf0 || status === 0xf7) {
+        const sysLen = readVLQ(view, st);
+        st.pos += sysLen;
+      } else {
+        const cmd = status & 0xf0;
+        const ch = status & 0x0f;
+        if (cmd === 0x80) {
+          const note = view.getUint8(st.pos++);
+          st.pos++;
+          rawEvents.push({ tick: absTick, order: 1, type: "off", ch, note });
+        } else if (cmd === 0x90) {
+          const note = view.getUint8(st.pos++);
+          const vel = view.getUint8(st.pos++);
+          rawEvents.push({
+            tick: absTick,
+            order: vel > 0 ? 3 : 1,
+            type: vel > 0 ? "on" : "off",
+            ch,
+            note,
+            vel
+          });
+        } else if (cmd === 0xa0 || cmd === 0xb0 || cmd === 0xe0) {
+          st.pos += 2;
+        } else if (cmd === 0xc0) {
+          const prog = view.getUint8(st.pos++);
+          rawEvents.push({ tick: absTick, order: 2, type: "prog", ch, prog });
+        } else if (cmd === 0xd0) {
+          st.pos += 1;
+        } else {
+          break;
+        }
+      }
+    }
+    pos = trackEnd;
+  }
+
+  rawEvents.sort((a, b) => (a.tick - b.tick) || (a.order - b.order));
+
+  let lastTick = 0;
+  let elapsedSec = 0;
+  let usPerBeat = 500000;
+  const chProg = new Array(16).fill(0);
+  const active = new Map();
+  const notes = [];
+
+  for (const ev of rawEvents) {
+    if (ev.tick > lastTick) {
+      elapsedSec += ((ev.tick - lastTick) / tpqn) * (usPerBeat / 1000000);
+      lastTick = ev.tick;
+    }
+    if (ev.type === "tempo") {
+      usPerBeat = Math.max(50000, ev.usPerBeat);
+    } else if (ev.type === "prog") {
+      chProg[ev.ch] = ev.prog;
+    } else if (ev.type === "on") {
+      const key = `${ev.ch}_${ev.note}`;
+      if (!active.has(key)) active.set(key, []);
+      active.get(key).push({
+        start: elapsedSec,
+        midi: ev.note,
+        vel: ev.vel,
+        ch: ev.ch,
+        prog: chProg[ev.ch]
+      });
+    } else if (ev.type === "off") {
+      const key = `${ev.ch}_${ev.note}`;
+      const q = active.get(key);
+      if (q && q.length > 0) {
+        const stNote = q.shift();
+        const dur = Math.max(0.05, Math.min(6.0, elapsedSec - stNote.start));
+        notes.push({ ...stNote, dur });
+      }
+    }
+  }
+
+  for (const q of active.values()) {
+    for (const stNote of q) {
+      notes.push({ ...stNote, dur: 0.4 });
+    }
+  }
+
+  notes.sort((a, b) => a.start - b.start);
+  const totalDuration = Math.max(1.0, elapsedSec + 0.6);
+  return { notes, duration: totalDuration };
+}
+
+function scheduleMidiPercussion(when, midiNote, vel) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const amp = (vel / 127) * 0.11;
+
+  if (midiNote === 35 || midiNote === 36) {
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(135, when);
+    osc.frequency.exponentialRampToValueAtTime(38, when + 0.12);
+    gain.gain.setValueAtTime(amp * 1.4, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
+  } else if (midiNote === 38 || midiNote === 40) {
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(220, when);
+    osc.frequency.exponentialRampToValueAtTime(90, when + 0.11);
+    gain.gain.setValueAtTime(amp, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.12);
+  } else {
+    osc.type = "square";
+    osc.frequency.setValueAtTime(850, when);
+    gain.gain.setValueAtTime(amp * 0.35, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
+  }
+
+  osc.connect(gain);
+  gain.connect(musicBus);
+  osc.start(when);
+  osc.stop(when + 0.16);
+}
+
+function scheduleCustomMidiNote(when, n) {
+  if (n.ch === 9) {
+    scheduleMidiPercussion(when, n.midi, n.vel);
+    return;
+  }
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  let wave = "triangle";
+  let scale = 0.055;
+  if (n.prog >= 32 && n.prog <= 39) {
+    wave = "sine";
+    scale = 0.09;
+  } else if (n.prog >= 80 && n.prog <= 87) {
+    wave = "square";
+    scale = 0.032;
+  } else if (n.prog >= 48 && n.prog <= 79) {
+    wave = "sawtooth";
+    scale = 0.025;
+  }
+
+  const peak = Math.max(0.005, (n.vel / 127) * scale);
+  osc.type = wave;
+  osc.frequency.setValueAtTime(midiToFreq(n.midi), when);
+
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.linearRampToValueAtTime(peak, when + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + n.dur + 0.04);
+
+  osc.connect(gain);
+  gain.connect(musicBus);
+  osc.start(when);
+  osc.stop(when + n.dur + 0.06);
+}
+
+function pumpCustomMidiScheduler() {
+  if (!musicPlaying || selectedMusicTrack !== "custom" || !customMidiData) return;
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  const now = audioCtx.currentTime;
+  const lookahead = 0.25;
+  const { notes, duration } = customMidiData;
+  if (!notes.length) return;
+
+  while (true) {
+    const loopOffset = midiLoopCount * duration;
+    if (midiNextNoteIdx >= notes.length) {
+      midiLoopCount++;
+      midiNextNoteIdx = 0;
+      continue;
+    }
+    const n = notes[midiNextNoteIdx];
+    const playAt = midiStartCtxTime + loopOffset + n.start;
+    if (playAt <= now + lookahead) {
+      if (playAt >= now - 0.05) {
+        scheduleCustomMidiNote(Math.max(now, playAt), n);
+      }
+      midiNextNoteIdx++;
+    } else {
+      break;
+    }
+  }
+}
+
+function stopAllMusicTimers() {
+  if (synthTimer) { clearInterval(synthTimer); synthTimer = null; }
+  if (midiSchedulerTimer) { clearInterval(midiSchedulerTimer); midiSchedulerTimer = null; }
+}
+
+function startActiveMusicPlayback() {
+  stopAllMusicTimers();
+  if (!musicPlaying) return;
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  if (selectedMusicTrack === "custom" && customMidiData) {
+    midiStartCtxTime = audioCtx.currentTime + 0.05;
+    midiNextNoteIdx = 0;
+    midiLoopCount = 0;
+    pumpCustomMidiScheduler();
+    midiSchedulerTimer = setInterval(pumpCustomMidiScheduler, 50);
+  } else {
+    selectedMusicTrack = "deltarune";
+    stepDeltaruneSynth();
+    synthTimer = setInterval(stepDeltaruneSynth, 290);
+  }
+}
+
+function updateMusicUI() {
+  const btn = document.getElementById("musicToggleBtn");
+  if (btn) {
+    btn.textContent = musicPlaying ? "Music: On" : "Music: Off";
+    btn.className = "pill music-btn" + (musicPlaying ? " music-on" : "");
+  }
+  const sel = document.getElementById("musicTrackSelect");
+  if (sel) {
+    sel.innerHTML = `<option value="deltarune">Deltarune Synth</option>`;
+    if (customMidiData) {
+      const opt = document.createElement("option");
+      opt.value = "custom";
+      opt.textContent = `MIDI: ${customMidiData.name}`;
+      sel.appendChild(opt);
+    }
+    sel.value = (selectedMusicTrack === "custom" && customMidiData) ? "custom" : "deltarune";
+  }
+}
+
+function toggleLobbyMusic() {
+  musicPlaying = !musicPlaying;
+  localStorage.setItem("bh_music_pref", musicPlaying ? "on" : "off");
+  updateMusicUI();
+  if (musicPlaying) startActiveMusicPlayback();
+  else stopAllMusicTimers();
+}
+
+function switchMusicTrack(trackVal) {
+  selectedMusicTrack = trackVal;
+  localStorage.setItem("bh_music_track", trackVal);
+  updateMusicUI();
+  if (musicPlaying) startActiveMusicPlayback();
+}
+
+function handleMidiUpload(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const buf = reader.result;
+      const parsed = parseStandardMidi(buf);
+      if (!parsed.notes.length) {
+        setBanner("No playable notes found in that MIDI file.");
+        return;
+      }
+      const cleanName = file.name.replace(/\.(mid|midi)$/i, "").slice(0, 22);
+      customMidiData = { name: cleanName, notes: parsed.notes, duration: parsed.duration };
+      selectedMusicTrack = "custom";
+      localStorage.setItem("bh_music_track", "custom");
+
+      if (buf.byteLength <= 1500000) {
+        const bytes = new Uint8Array(buf);
+        let bin = "";
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        localStorage.setItem("bh_custom_midi_b64", btoa(bin));
+        localStorage.setItem("bh_custom_midi_name", cleanName);
+      }
+
+      musicPlaying = true;
+      localStorage.setItem("bh_music_pref", "on");
+      updateMusicUI();
+      startActiveMusicPlayback();
+      setBanner(`Playing MIDI: ${cleanName} (${parsed.notes.length} notes)`);
+    } catch (err) {
+      setBanner("Could not read MIDI file — try a standard .mid file.");
+    }
+    inputEl.value = "";
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+(function restoreSavedMidi() {
+  try {
+    const b64 = localStorage.getItem("bh_custom_midi_b64");
+    const savedName = localStorage.getItem("bh_custom_midi_name");
+    if (b64 && savedName) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const parsed = parseStandardMidi(bytes.buffer);
+      if (parsed.notes.length) {
+        customMidiData = { name: savedName, notes: parsed.notes, duration: parsed.duration };
+      }
+    }
+  } catch (e) {}
+  updateMusicUI();
+
+  if (localStorage.getItem("bh_music_pref") === "on") {
+    musicPlaying = true;
+    updateMusicUI();
+    const unlockOnce = () => {
+      if (musicPlaying && !synthTimer && !midiSchedulerTimer) {
+        startActiveMusicPlayback();
+      }
+      window.removeEventListener("pointerdown", unlockOnce);
+    };
+    window.addEventListener("pointerdown", unlockOnce);
+  }
+})();
+
+// ==========================================
+// 3. CONTENT FILTER (CHAT & NICKNAMES)
+// ==========================================
+const BLOCKED_B64 = [
+  "ZnVjaw==", "c2hpdA==", "Yml0Y2g=", "YXNzaG9sZQ==", "Y3VudA==",
+  "ZGljaw==", "cHVzc3k=", "bmlnZ2Vy", "bmlnZ2E=", "ZmFnZ290",
+  "cmV0YXJk", "c2x1dA==", "d2hvcmU=", "a3lz"
+];
+const BLOCKED_WORDS = BLOCKED_B64.map(b => atob(b));
+
+function normalizeForFilter(token) {
+  return token
+    .toLowerCase()
+    .replace(/[@4]/g, "a")
+    .replace(/3/g, "e")
+    .replace(/[1!]/g, "i")
+    .replace(/0/g, "o")
+    .replace(/[$5]/g, "s")
+    .replace(/7/g, "t")
+    .replace(/[^a-z]/g, "")
+    .replace(/(.)\1{2,}/g, "$1$1");
+}
+
+function filterChatText(raw) {
+  let clean = String(raw || "")
+    .replace(/(https?:\/\/|www\.)\S+/gi, "[link removed]")
+    .replace(/(.)\1{6,}/g, "$1$1$1$1");
+
+  return clean.split(/(\s+)/).map(part => {
+    if (!part.trim()) return part;
+    const norm = normalizeForFilter(part);
+    const collapsed = norm.replace(/(.)\1+/g, "$1");
+    for (const w of BLOCKED_WORDS) {
+      const wCollapsed = w.replace(/(.)\1+/g, "$1");
+      const re = new RegExp(`^(${w}|${wCollapsed})(s|es|ed|er|ers|ing|y|hole|head|face)?$`);
+      if (re.test(norm) || re.test(collapsed)) {
+        return "*".repeat(Math.max(4, part.length));
+      }
+    }
+    return part;
+  }).join("");
+}
+
+// ==========================================
+// 4. PERSISTENT PROFILE, ONE-TIME NICKNAME & ELO
+// ==========================================
+let deviceId = localStorage.getItem("bh_device_id");
+if (!deviceId) {
+  deviceId = "dev_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  localStorage.setItem("bh_device_id", deviceId);
+}
+
+let defaultGuest = localStorage.getItem("bh_guest_id");
+if (!defaultGuest) {
+  defaultGuest = "guest_" + Math.floor(1000 + Math.random() * 9000);
+  localStorage.setItem("bh_guest_id", defaultGuest);
+}
+
+let playerName = localStorage.getItem("bh_player_name") || defaultGuest;
+let nameLocked = localStorage.getItem("bh_name_locked") === "true";
+let playerElo = parseInt(localStorage.getItem("bh_elo") || "1200", 10);
+let statsW = parseInt(localStorage.getItem("bh_wins") || "0", 10);
+let statsL = parseInt(localStorage.getItem("bh_losses") || "0", 10);
+let statsD = parseInt(localStorage.getItem("bh_draws") || "0", 10);
+
+const myClientId = deviceId + "_" + Math.random().toString(36).slice(2, 6);
+
+let leaderboardMap = new Map();
+try {
+  const cached = JSON.parse(localStorage.getItem("bh_lb_cache") || "[]");
+  for (const item of cached) {
+    if (item && item.id) leaderboardMap.set(item.id, item);
+  }
+} catch (e) {}
+
+function saveMyProfileLocally() {
+  localStorage.setItem("bh_player_name", playerName);
+  localStorage.setItem("bh_name_locked", nameLocked ? "true" : "false");
+  localStorage.setItem("bh_elo", String(playerElo));
+  localStorage.setItem("bh_wins", String(statsW));
+  localStorage.setItem("bh_losses", String(statsL));
+  localStorage.setItem("bh_draws", String(statsD));
+
+  leaderboardMap.set(deviceId, {
+    id: deviceId,
+    name: playerName,
+    elo: playerElo,
+    w: statsW,
+    l: statsL,
+    d: statsD,
+    updated: Date.now()
+  });
+  saveLeaderboardCache();
+  updateProfileUI();
+  renderLeaderboard();
+}
+
+function saveLeaderboardCache() {
+  const arr = Array.from(leaderboardMap.values())
+    .sort((a, b) => b.elo - a.elo)
+    .slice(0, 30);
+  localStorage.setItem("bh_lb_cache", JSON.stringify(arr));
+}
+
+function updateProfileUI() {
+  document.getElementById("headerNameText").textContent = `${playerName} (${playerElo})`;
+  document.getElementById("headerSetNameBtn").style.display = nameLocked ? "none" : "inline-block";
+  const stripBtn = document.getElementById("stripSetNameBtn");
+  if (stripBtn) {
+    stripBtn.style.display = (nameLocked || mode === "spectate") ? "none" : "inline-block";
+  }
+  if (mode !== "spectate") {
+    bottomTitle = `${playerName} (You)`;
+    bottomEloVal = playerElo;
+  }
+}
+
+function openNicknameModal() {
+  if (nameLocked) return;
+  const modal = document.getElementById("nicknameModal");
+  const inp = document.getElementById("nicknameInput");
+  inp.value = playerName.startsWith("guest_") ? "" : playerName;
+  modal.style.display = "flex";
+  setTimeout(() => inp.focus(), 50);
+}
+
+function closeNicknameModal() {
+  document.getElementById("nicknameModal").style.display = "none";
+}
+
+function confirmNickname() {
+  if (nameLocked) {
+    closeNicknameModal();
+    return;
+  }
+  const raw = document.getElementById("nicknameInput").value.trim();
+  const clean = raw.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
+  if (clean.length < 2 || clean.length > 14) {
+    alert("Please enter a nickname between 2 and 14 characters (letters, numbers, spaces, or _).");
+    return;
+  }
+  if (filterChatText(clean).includes("*")) {
+    alert("Please choose a clean nickname.");
+    return;
+  }
+  if (!confirm(`Lock in "${clean}" permanently on this device? You can only change your nickname once.`)) {
+    return;
+  }
+  playerName = clean;
+  nameLocked = true;
+  closeNicknameModal();
+  saveMyProfileLocally();
+  publishLeaderboardRecord();
+  renderAll();
+}
+
+function renderLeaderboard() {
+  const box = document.getElementById("leaderboardList");
+  if (!box) return;
+  const entries = Array.from(leaderboardMap.values())
+    .sort((a, b) => (b.elo - a.elo) || (b.w - a.w));
+
+  document.getElementById("lbCountLabel").textContent = `${entries.length} Player${entries.length === 1 ? "" : "s"}`;
+  box.innerHTML = "";
+
+  entries.slice(0, 20).forEach((p, idx) => {
+    const isMe = (p.id === deviceId);
+    const row = document.createElement("div");
+    row.className = "lb-row" + (isMe ? " me" : "");
+    const rankCls = idx === 0 ? "top1" : idx === 1 ? "top2" : idx === 2 ? "top3" : "";
+    const safeName = filterChatText(String(p.name || "Player")).replace(/[<>&]/g, "");
+    row.innerHTML = `
+      <span class="lb-rank ${rankCls}">#${idx + 1}</span>
+      <span class="lb-name">${safeName}${isMe ? " (You)" : ""}</span>
+      <span class="lb-wld">${p.w || 0}W-${p.l || 0}L</span>
+      <span class="lb-elo">${p.elo || 1200}</span>
+    `;
+    box.appendChild(row);
+  });
+}
+
+function applyRatedResult(winSide) {
+  if (mode === "spectate" || ratingApplied || moveLog.length < 2) return "";
+  ratingApplied = true;
+
+  const oppRating = opponentEloVal || 1200;
+  const expected = 1 / (1 + Math.pow(10, (oppRating - playerElo) / 400));
+  let actual = 0.5;
+  if (winSide === mySide) {
+    actual = 1.0;
+    statsW++;
+  } else if (winSide === 3) {
+    actual = 0.5;
+    statsD++;
+  } else {
+    actual = 0.0;
+    statsL++;
+  }
+
+  const delta = Math.round(32 * (actual - expected));
+  playerElo = Math.max(100, playerElo + delta);
+  saveMyProfileLocally();
+  publishLeaderboardRecord();
+
+  const sign = delta >= 0 ? "+" : "";
+  return ` (${sign}${delta} Elo)`;
+}
+
+// ==========================================
+// 5. ARENA CHAT + OP SLASH COMMANDS
+// ==========================================
+const WORLD_CHAT_TOPIC = "boardhub/v1/chat/world";
+const GROUP_CHAT_PREFIX = "boardhub/v1/chat/group/";
+const CHAT_COOLDOWN_MS = 3000;
+
+let activeChatTab = "world";
+let activeGroupCode = localStorage.getItem("bh_group_code") || "";
+let lastChatSendTs = 0;
+let chatCooldownTimer = null;
+
+const chatHistory = {
+  world: [
+    { sys: true, text: "Welcome to Worldwide Chat! Say hi to online players." }
+  ],
+  match: [
+    { sys: true, text: "Start an online match or friend room to chat with your opponent." }
+  ],
+  group: [
+    { sys: true, text: "Create a New Group or enter a 4-digit code to join friends." }
+  ]
+};
+
+const chatUnread = { world: 0, match: 0, group: 0 };
+
+function startChatCooldownUI() {
+  const btn = document.getElementById("btnSendChat");
+  if (!btn) return;
+  if (chatCooldownTimer) clearInterval(chatCooldownTimer);
+
+  const tick = () => {
+    const remaining = CHAT_COOLDOWN_MS - (Date.now() - lastChatSendTs);
+    if (remaining <= 0) {
+      clearInterval(chatCooldownTimer);
+      chatCooldownTimer = null;
+      btn.disabled = false;
+      btn.textContent = "Send";
+    } else {
+      btn.disabled = true;
+      btn.textContent = `${Math.ceil(remaining / 1000)}s`;
+    }
+  };
+  tick();
+  chatCooldownTimer = setInterval(tick, 200);
+}
+
+function appendChatMessage(channel, entry, notifySound = false) {
+  const list = chatHistory[channel];
+  if (!list) return;
+  if (!entry.sys && !entry.announce && entry.text) {
+    entry.text = filterChatText(entry.text);
+  }
+  if (!entry.sys && !entry.announce && entry.name) {
+    entry.name = filterChatText(entry.name);
+  }
+  list.push(entry);
+  if (list.length > 65) list.shift();
+
+  if (activeChatTab === channel) {
+    renderChatFeed();
+  } else if (!entry.sys) {
+    chatUnread[channel]++;
+    updateChatBadges();
+  }
+  if (notifySound && !entry.mine && !entry.sys) {
+    playSound("chat");
+  }
+}
+
+function clearChannelLocal(channel, byWho = "Moderator") {
+  if (!chatHistory[channel]) return;
+  chatHistory[channel] = [
+    { sys: true, text: `Chat cleared by ${byWho}.` }
+  ];
+  chatUnread[channel] = 0;
+  updateChatBadges();
+  if (activeChatTab === channel) renderChatFeed();
+}
+
+function updateChatBadges() {
+  for (const ch of ["world", "match", "group"]) {
+    const badge = document.getElementById("unread-" + ch);
+    if (!badge) continue;
+    const count = chatUnread[ch];
+    badge.textContent = count > 9 ? "9+" : String(count);
+    badge.classList.toggle("show", count > 0);
+  }
+}
+
+function updateChatHeaderAndControls() {
+  const titleEl = document.getElementById("chatPanelTitle");
+  const statusEl = document.getElementById("chatChannelStatus");
+  const groupBar = document.getElementById("groupControlsBar");
+  const inputEl = document.getElementById("chatInput");
+
+  if (titleEl) {
+    titleEl.textContent = isOpAdmin ? "Arena Chat [OP UNLOCKED]" : "Arena Chat (Filtered · 3s)";
+  }
+
+  groupBar.classList.toggle("show", activeChatTab === "group");
+
+  if (activeChatTab === "world") {
+    statusEl.textContent = "Worldwide Lobby";
+    inputEl.placeholder = "Message everyone online...";
+  } else if (activeChatTab === "match") {
+    const inOnlineMatch = (mode === "host" || mode === "guest") && Boolean(roomTopic);
+    if (inOnlineMatch) {
+      statusEl.textContent = `vs ${opponentName}`;
+      inputEl.placeholder = `Message ${opponentName}...`;
+    } else {
+      statusEl.textContent = "Offline / Bot Match";
+      inputEl.placeholder = "Message opponent (online matches only)...";
+    }
+  } else if (activeChatTab === "group") {
+    const tagEl = document.getElementById("activeGroupLabel");
+    const createBtn = document.getElementById("btnCreateGroup");
+    const joinInp = document.getElementById("groupCodeInput");
+    const joinBtn = document.getElementById("btnJoinGroup");
+    const leaveBtn = document.getElementById("btnLeaveGroup");
+
+    if (activeGroupCode) {
+      statusEl.textContent = `Group #${activeGroupCode}`;
+      tagEl.style.display = "inline-block";
+      tagEl.textContent = `Code: ${activeGroupCode}`;
+      createBtn.style.display = "none";
+      joinInp.style.display = "none";
+      joinBtn.style.display = "none";
+      leaveBtn.style.display = "inline-block";
+      inputEl.placeholder = `Message Group #${activeGroupCode}...`;
+    } else {
+      statusEl.textContent = "No Group Joined";
+      tagEl.style.display = "none";
+      createBtn.style.display = "inline-block";
+      joinInp.style.display = "inline-block";
+      joinBtn.style.display = "inline-block";
+      leaveBtn.style.display = "none";
+      inputEl.placeholder = "Create or join a group first...";
+    }
+  }
+}
+
+function switchChatTab(tab) {
+  activeChatTab = tab;
+  chatUnread[tab] = 0;
+  updateChatBadges();
+
+  for (const ch of ["world", "match", "group"]) {
+    document.getElementById("chat-tab-" + ch).classList.toggle("active", ch === tab);
+  }
+  updateChatHeaderAndControls();
+  renderChatFeed();
+}
+
+function renderChatFeed() {
+  const box = document.getElementById("chatFeed");
+  if (!box) return;
+  box.innerHTML = "";
+
+  for (const m of chatHistory[activeChatTab]) {
+    const row = document.createElement("div");
+    if (m.announce) {
+      row.className = "chat-msg announce";
+      row.textContent = m.text;
+    } else if (m.sys) {
+      row.className = "chat-msg sys";
+      row.textContent = m.text;
+    } else {
+      row.className = "chat-msg" + (m.mine ? " mine" : "");
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "chat-sender";
+      nameSpan.textContent = m.mine ? `${playerName} (You)` : m.name;
+
+      const eloSpan = document.createElement("span");
+      eloSpan.className = "chat-elo";
+      eloSpan.textContent = `[${m.elo || 1200}]`;
+
+      const textSpan = document.createElement("span");
+      textSpan.textContent = m.text;
+
+      row.appendChild(nameSpan);
+      row.appendChild(eloSpan);
+      row.appendChild(textSpan);
+    }
+    box.appendChild(row);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function handleSlashCommand(raw) {
+  const parts = raw.trim().split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const arg = parts.slice(1).join(" ");
+
+  if (cmd === "/admin") {
+    if (arg === ADMIN_PASS) {
+      isOpAdmin = true;
+      updateChatHeaderAndControls();
+      appendChatMessage(activeChatTab, {
+        sys: true,
+        text: "OP Mode unlocked! Commands: /gg, /clear, /clearlb, /kicklb, /announce, /draw, /resetelo"
+      });
+    } else {
+      appendChatMessage(activeChatTab, { sys: true, text: "Invalid admin passcode." });
+    }
+    return;
+  }
+
+  if (!isOpAdmin) {
+    appendChatMessage(activeChatTab, {
+      sys: true,
+      text: "OP commands are locked. Unlock first with /admin <passcode>."
+    });
+    return;
+  }
+
+  if (cmd === "/help") {
+    appendChatMessage(activeChatTab, {
+      sys: true,
+      text: "OP Commands: /gg · /clear · /clearlb · /kicklb <name> · /announce <msg> · /draw · /resetelo"
+    });
+  } else if (cmd === "/gg") {
+    if (mode === "spectate") {
+      finishMatch(1, "by OP command");
+      return;
+    }
+    if (winner !== 0) {
+      appendChatMessage(activeChatTab, { sys: true, text: "Match is already over." });
+      return;
+    }
+    if (mode === "guest") {
+      sendRoomMsg({ type: "op_gg", winnerSide: mySide });
+      finishMatch(mySide, "by OP command");
+    } else {
+      finishMatch(mySide, "by OP command");
+      syncToPeer();
+    }
+    appendChatMessage(activeChatTab, { sys: true, text: "OP /gg executed — instant victory!" });
+  } else if (cmd === "/draw") {
+    if (winner !== 0) return;
+    if (mode === "guest") {
+      sendRoomMsg({ type: "op_draw" });
+      finishMatch(3, "by OP command");
+    } else {
+      finishMatch(3, "by OP command");
+      syncToPeer();
+    }
+    appendChatMessage(activeChatTab, { sys: true, text: "OP /draw executed." });
+  } else if (cmd === "/clear") {
+    clearChannelLocal(activeChatTab, playerName);
+    if (activeChatTab === "world") {
+      connectGlobalRelay(() => {
+        mqttClient.publish(WORLD_CHAT_TOPIC, JSON.stringify({
+          type: "world_clear",
+          sender: myClientId,
+          by: playerName
+        }));
+      });
+    } else if (activeChatTab === "match" && (mode === "host" || mode === "guest") && roomTopic) {
+      sendRoomMsg({ type: "match_clear", by: playerName });
+    } else if (activeChatTab === "group" && activeGroupCode) {
+      connectGlobalRelay(() => {
+        mqttClient.publish(GROUP_CHAT_PREFIX + activeGroupCode, JSON.stringify({
+          type: "group_clear",
+          sender: myClientId,
+          by: playerName
+        }));
+      });
+    }
+  } else if (cmd === "/announce") {
+    if (!arg) {
+      appendChatMessage(activeChatTab, { sys: true, text: "Usage: /announce <message>" });
+      return;
+    }
+    const bannerText = `[ADMIN ${playerName}]: ${arg.slice(0, 140)}`;
+    appendChatMessage("world", { announce: true, text: bannerText });
+    connectGlobalRelay(() => {
+      mqttClient.publish(WORLD_CHAT_TOPIC, JSON.stringify({
+        type: "world_announce",
+        sender: myClientId,
+        text: bannerText
+      }));
+    });
+  } else if (cmd === "/resetelo") {
+    playerElo = 1200;
+    statsW = 0;
+    statsL = 0;
+    statsD = 0;
+    saveMyProfileLocally();
+    publishLeaderboardRecord();
+    renderAll();
+    appendChatMessage(activeChatTab, { sys: true, text: "Elo and W/L/D stats reset to 1200." });
+  } else if (cmd === "/clearlb") {
+    for (const id of leaderboardMap.keys()) {
+      if (id !== deviceId && mqttClient && mqttClient.connected) {
+        mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
+        setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
+      }
+    }
+    leaderboardMap.clear();
+    localStorage.removeItem("bh_lb_cache");
+    saveMyProfileLocally();
+    publishLeaderboardRecord();
+    appendChatMessage(activeChatTab, { sys: true, text: "Leaderboard wiped clean!" });
+  } else if (cmd === "/kicklb") {
+    if (!arg) {
+      appendChatMessage(activeChatTab, { sys: true, text: "Usage: /kicklb <player_name>" });
+      return;
+    }
+    const target = arg.toLowerCase();
+    let removed = 0;
+    for (const [id, entry] of leaderboardMap.entries()) {
+      if (id !== deviceId && String(entry.name || "").toLowerCase() === target) {
+        leaderboardMap.delete(id);
+        if (mqttClient && mqttClient.connected) {
+          mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
+          setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
+        }
+        removed++;
+      }
+    }
+    saveLeaderboardCache();
+    renderLeaderboard();
+    appendChatMessage(activeChatTab, { sys: true, text: `Removed ${removed} entry(s) matching "${arg}".` });
+  } else {
+    appendChatMessage(activeChatTab, { sys: true, text: `Unknown command "${cmd}". Type /help.` });
+  }
+}
+
+function subscribeGroupTopic(code, announceJoin = true) {
+  if (!code || !mqttClient || !mqttClient.connected) return;
+  const topic = GROUP_CHAT_PREFIX + code;
+  mqttClient.subscribe(topic, () => {
+    if (announceJoin) {
+      mqttClient.publish(topic, JSON.stringify({
+        type: "group_sys",
+        sender: myClientId,
+        text: `${playerName} joined Group #${code}.`
+      }));
+    }
+  });
+}
+
+function createGroupChat() {
+  const newCode = String(Math.floor(1000 + Math.random() * 9000));
+  if (activeGroupCode && mqttClient && mqttClient.connected) {
+    mqttClient.unsubscribe(GROUP_CHAT_PREFIX + activeGroupCode);
+  }
+  activeGroupCode = newCode;
+  localStorage.setItem("bh_group_code", newCode);
+  chatHistory.group = [
+    { sys: true, text: `Group #${newCode} created! Share code ${newCode} with friends.` }
+  ];
+  updateChatHeaderAndControls();
+  renderChatFeed();
+  connectGlobalRelay(() => subscribeGroupTopic(newCode, false));
+}
+
+function joinGroupChat() {
+  const inp = document.getElementById("groupCodeInput");
+  const code = inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length < 3 || code.length > 6) {
+    appendChatMessage("group", { sys: true, text: "Enter a valid 4-digit group code to join." });
+    return;
+  }
+  if (activeGroupCode && activeGroupCode !== code && mqttClient && mqttClient.connected) {
+    mqttClient.unsubscribe(GROUP_CHAT_PREFIX + activeGroupCode);
+  }
+  activeGroupCode = code;
+  localStorage.setItem("bh_group_code", code);
+  inp.value = "";
+  chatHistory.group = [
+    { sys: true, text: `Joined Group #${code}.` }
+  ];
+  updateChatHeaderAndControls();
+  renderChatFeed();
+  connectGlobalRelay(() => subscribeGroupTopic(code, true));
+}
+
+function leaveGroupChat() {
+  if (!activeGroupCode) return;
+  const oldCode = activeGroupCode;
+  if (mqttClient && mqttClient.connected) {
+    const topic = GROUP_CHAT_PREFIX + oldCode;
+    mqttClient.publish(topic, JSON.stringify({
+      type: "group_sys",
+      sender: myClientId,
+      text: `${playerName} left the group.`
+    }));
+    mqttClient.unsubscribe(topic);
+  }
+  activeGroupCode = "";
+  localStorage.removeItem("bh_group_code");
+  chatHistory.group = [
+    { sys: true, text: `Left Group #${oldCode}. Create or join another group anytime.` }
+  ];
+  updateChatHeaderAndControls();
+  renderChatFeed();
+}
+
+function sendChatMessage() {
+  const inp = document.getElementById("chatInput");
+  const raw = inp.value.trim();
+  if (!raw) return;
+
+  if (raw.startsWith("/")) {
+    inp.value = "";
+    handleSlashCommand(raw);
+    return;
+  }
+
+  const now = Date.now();
+  if (now - lastChatSendTs < CHAT_COOLDOWN_MS) return;
+
+  const text = filterChatText(raw.slice(0, 160));
+  inp.value = "";
+
+  if (activeChatTab === "world") {
+    lastChatSendTs = now;
+    startChatCooldownUI();
+    appendChatMessage("world", { mine: true, name: playerName, elo: playerElo, text });
+    connectGlobalRelay(() => {
+      mqttClient.publish(WORLD_CHAT_TOPIC, JSON.stringify({
+        type: "world_chat",
+        sender: myClientId,
+        name: playerName,
+        elo: playerElo,
+        text
+      }));
+    });
+  } else if (activeChatTab === "match") {
+    if ((mode !== "host" && mode !== "guest") || !roomTopic) {
+      appendChatMessage("match", { sys: true, text: "You're playing a bot — start an online match to chat with an opponent!" });
+      return;
+    }
+    lastChatSendTs = now;
+    startChatCooldownUI();
+    appendChatMessage("match", { mine: true, name: playerName, elo: playerElo, text });
+    sendRoomMsg({
+      type: "match_chat",
+      name: playerName,
+      elo: playerElo,
+      text
+    });
+  } else if (activeChatTab === "group") {
+    if (!activeGroupCode) {
+      appendChatMessage("group", { sys: true, text: "Click 'New Group' or enter a code to join a group first!" });
+      return;
+    }
+    lastChatSendTs = now;
+    startChatCooldownUI();
+    appendChatMessage("group", { mine: true, name: playerName, elo: playerElo, text });
+    connectGlobalRelay(() => {
+      mqttClient.publish(GROUP_CHAT_PREFIX + activeGroupCode, JSON.stringify({
+        type: "group_chat",
+        sender: myClientId,
+        name: playerName,
+        elo: playerElo,
+        text
+      }));
+    });
+  }
+}
+
+updateChatHeaderAndControls();
+renderChatFeed();
+
+// ==========================================
+// 6. STOCKFISH WEB WORKER + PICO CALLBACKS
+// ==========================================
+let sfWorker = null;
+let sfReady = false;
+let sfCallback = null;
+let pendingPicoReq = null;
+let lastPicoSeen = 0;
+
+async function initStockfish() {
+  const badge = document.getElementById("engineBadge");
+  try {
+    const resp = await fetch("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js");
+    if (!resp.ok) throw new Error("Fetch failed");
+    const code = await resp.text();
+    const blobUrl = URL.createObjectURL(new Blob([code], { type: "application/javascript" }));
+    sfWorker = new Worker(blobUrl);
+
+    sfWorker.onmessage = (e) => {
+      const line = String(e.data || "");
+      if (line === "uciok") {
+        sfWorker.postMessage("isready");
+      } else if (line === "readyok") {
+        sfReady = true;
+        badge.textContent = "Stockfish Ready";
+      } else if (line.startsWith("bestmove")) {
+        const parts = line.split(" ");
+        const uci = parts[1];
+        if (sfCallback && uci && uci !== "(none)") {
+          const cb = sfCallback;
+          sfCallback = null;
+          cb(uci);
+        }
+      }
+    };
+    sfWorker.postMessage("uci");
+  } catch (err) {
+    badge.textContent = "Built-in AI Ready";
+  }
+}
+initStockfish();
+
+function isPicoOnline() {
+  return (Date.now() - lastPicoSeen) < 18000;
+}
+
+setInterval(() => {
+  const el = document.getElementById("picoStatusBadge");
+  if (isPicoOnline()) {
+    el.textContent = "Pico: Online";
+    el.className = "pill pico-on";
+  } else {
+    el.textContent = "Pico: Offline";
+    el.className = "pill";
+  }
+}, 2000);
+
+// ==========================================
+// 7. CRISP VECTOR SVG CHESS PIECES
+// ==========================================
+function getPieceSVG(color, type, cls = "piece-svg") {
+  const fill = color === "w" ? "#ffffff" : "#1e293b";
+  const stroke = color === "w" ? "#0f172a" : "#020617";
+  const detail = color === "w" ? "#0f172a" : "#cbd5e1";
+
+  const shapes = {
+    p: `<path d="M22.5 9a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm-4 9.5h8l1.5 3h-11l1.5-3zm-2 3.5h12c1.5 3.5 3.5 6.5 4.5 11.5h-21c1-5 3-8 4.5-11.5zM11.5 34.5h22v4h-22v-4z" fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linejoin="round"/>`,
+    r: `<path d="M9 39h27v-3H9v3zm3-3v-4h21v4H12zm-1-22V9h4v2h5V9h5v2h5V9h4v5l-3 3H14l-3-3zm3 3h17v12.5H14V17zm-2.5 15.5l2.5-3h17l2.5 3h-22z" fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 29.5h17M14 17h17" stroke="${detail}" stroke-width="1.3"/>`,
+    n: `<path d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3" fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="14.5" cy="15.5" r="1.2" fill="${detail}"/><path d="M9.5 39h26v-3h-26v3z" fill="${fill}" stroke="${stroke}" stroke-width="1.8"/>`,
+    b: `<g fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linejoin="round"><path d="M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z"/><path d="M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/><circle cx="22.5" cy="8" r="2.5"/></g><path d="M17.5 26h10M15 30h15M22.5 15.5v5M20 18h5" stroke="${detail}" stroke-width="1.5" stroke-linecap="round"/>`,
+    q: `<g fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linejoin="round"><circle cx="6" cy="12" r="2.2"/><circle cx="14" cy="9" r="2.2"/><circle cx="22.5" cy="8" r="2.2"/><circle cx="31" cy="9" r="2.2"/><circle cx="39" cy="12" r="2.2"/><path d="M9 26c8.5-1.5 21-1.5 27 0l2.5-12.5L31 25l-.3-14.1-5.2 13.6-3-14.5-3 14.5-5.2-13.6L14 25 6.5 13.5 9 26z"/><path d="M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z"/></g><path d="M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0" fill="none" stroke="${detail}" stroke-width="1.4"/>`,
+    k: `<path d="M22.5 11.63V6M20 8h5" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round"/><path d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5" fill="${fill}" stroke="${stroke}" stroke-width="1.8"/><path d="M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z" fill="${fill}" stroke="${stroke}" stroke-width="1.8" stroke-linejoin="round"/><path d="M11.5 30c5.5-3 15.5-3 21 0M11.5 33.5c5.5-3 15.5-3 21 0M11.5 37c5.5-3 15.5-3 21 0" fill="none" stroke="${detail}" stroke-width="1.4"/>`
+  };
+  return `<svg class="${cls}" viewBox="0 0 45 45">${shapes[type]}</svg>`;
+}
+
+// ==========================================
+// 8. GAME STATE & TOP TAB SWITCHER
+// ==========================================
+let currentMatchId = 0;
+let selectedGame = "chess";
+let mode = "bot";
+let mySide = 1;
+let gameType = "chess";
+let baseTime = 180;
+let clocks = { 1: 180, 2: 180 };
+let clockTimer = null;
+let winner = 0;
+let endReason = "";
+let ratingDeltaText = "";
+let ratingApplied = false;
+let bottomTitle = `${playerName} (You)`;
+let bottomEloVal = playerElo;
+let opponentName = "Master Bot";
+let opponentEloVal = 1800;
+let botConfig = { 1: "3", 2: "3" };
+let selected = null;
+let legalTargets = [];
+let lastMove = null;
+let moveLog = [];
+
+let chess = new Chess();
+let chkBoard = [];
+let chkTurn = 1;
+let c4Board = [];
+let c4Turn = 1;
+
+const PIECE_VAL = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+
+function selectGame(g) {
+  selectedGame = g;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + g).classList.add("active");
+  if (mode === "spectate") startSpectateBots();
+  else startLocalBot();
+}
+
+// ==========================================
+// 9. INITIALIZE & CLOCK MANAGEMENT
+// ==========================================
+function initMatch(gType, tSec, oppName, oppElo, side, botTitleOverride = null, botEloOverride = null) {
+  currentMatchId++;
+  sfCallback = null;
+  pendingPicoReq = null;
+  gameType = gType;
+  selectedGame = gType;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + gType).classList.add("active");
+
+  baseTime = tSec;
+  clocks = { 1: tSec, 2: tSec };
+  winner = 0;
+  endReason = "";
+  ratingDeltaText = "";
+  ratingApplied = false;
+  opponentName = oppName;
+  opponentEloVal = oppElo || 1200;
+  bottomTitle = botTitleOverride || `${playerName} (You)`;
+  bottomEloVal = botEloOverride || playerElo;
+  mySide = side;
+  selected = null;
+  legalTargets = [];
+  lastMove = null;
+  moveLog = [];
+
+  if (gameType === "chess") {
+    chess = new Chess();
+  } else if (gameType === "checkers") {
+    chkTurn = 1;
+    chkBoard = Array.from({ length: 8 }, (_, r) =>
+      Array.from({ length: 8 }, (_, c) => {
+        if ((r + c) % 2 === 1) {
+          if (r < 3) return 2;
+          if (r > 4) return 1;
+        }
+        return 0;
+      })
+    );
+  } else {
+    c4Turn = 1;
+    c4Board = Array.from({ length: 6 }, () => Array(7).fill(0));
+  }
+
+  document.getElementById("btnSpectate").classList.toggle("spectate-active", mode === "spectate");
+  document.getElementById("btnDraw").disabled = (mode === "bot" || mode === "spectate");
+  document.getElementById("btnResign").disabled = (mode === "spectate");
+  document.getElementById("btnRematch").disabled = false;
+
+  updateChatHeaderAndControls();
+  startClockLoop();
+  renderAll();
+}
+
+function getCurrentTurn() {
+  if (gameType === "chess") return chess.turn() === "w" ? 1 : 2;
+  if (gameType === "checkers") return chkTurn;
+  return c4Turn;
+}
+
+function startClockLoop() {
+  if (clockTimer) clearInterval(clockTimer);
+  if (baseTime === 0) return;
+  clockTimer = setInterval(() => {
+    if (winner !== 0) return;
+    const t = getCurrentTurn();
+    clocks[t] = Math.max(0, clocks[t] - 1);
+    updateClockUI();
+    if (clocks[t] === 0 && mode !== "guest") {
+      finishMatch(3 - t, "on time");
+      syncToPeer();
+    }
+  }, 1000);
+}
+
+function formatClock(sec) {
+  if (baseTime === 0) return "--:--";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function finishMatch(winSide, reason) {
+  if (winner !== 0) return;
+  winner = winSide;
+  endReason = reason;
+  ratingDeltaText = applyRatedResult(winSide);
+  playSound("end");
+  renderAll();
+}
+
+// ==========================================
+// 10. GLOBAL RELAY, LEADERBOARD & PICO WIFI BRIDGE
+// ==========================================
+const BROKERS = [
+  "wss://broker.emqx.io:8084/mqtt",
+  "wss://broker.hivemq.com:8884/mqtt",
+  "wss://mqtt.eclipseprojects.io:443/mqtt"
+];
+const PRESENCE_TOPIC = "boardhub/v1/presence";
+const LB_PLAYER_PREFIX = "boardhub/v1/lb/player/";
+const PICO_REQ_TOPIC = "boardhub/v1/pico/req";
+const PICO_RES_TOPIC = "boardhub/v1/pico/res";
+const PICO_STATUS_TOPIC = "boardhub/v1/pico/status";
+
+let mqttClient = null;
+let lobbyTopic = "";
+let roomTopic = "";
+let searching = false;
+let seekTimer = null;
+let joinRetryTimer = null;
+let pendingInvite = null;
+let lobbyPeers = new Map();
+let onlinePeers = new Map();
+let lastPresenceReply = 0;
+
+function publishLeaderboardRecord() {
+  if (!mqttClient || !mqttClient.connected) return;
+  const record = {
+    id: deviceId,
+    name: playerName,
+    elo: playerElo,
+    w: statsW,
+    l: statsL,
+    d: statsD,
+    updated: Date.now()
+  };
+  mqttClient.publish(LB_PLAYER_PREFIX + deviceId, JSON.stringify(record), { retain: true });
+}
+
+function updateOnlineCounterUI() {
+  onlinePeers.set(myClientId, Date.now());
+  const now = Date.now();
+  for (const [id, ts] of onlinePeers.entries()) {
+    if (id !== myClientId && now - ts > 24000) {
+      onlinePeers.delete(id);
+    }
+  }
+  const count = Math.max(1, onlinePeers.size);
+  document.getElementById("onlineCountText").textContent = `${count} Online`;
+}
+
+function sendHeartbeat() {
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(PRESENCE_TOPIC, JSON.stringify({ type: "hb", id: myClientId }));
+  }
+  updateOnlineCounterUI();
+}
+
+setInterval(sendHeartbeat, 8000);
+
+function setNetStatus(text, isOnline) {
+  const el = document.getElementById("netBadge");
+  el.textContent = text;
+  el.className = "pill" + (isOnline ? " online" : "");
+}
+
+function connectGlobalRelay(onReady = null, brokerIdx = 0) {
+  if (mqttClient && mqttClient.connected) {
+    if (onReady) onReady();
+    return;
+  }
+  if (brokerIdx >= BROKERS.length) {
+    setNetStatus("Local Only", false);
+    return;
+  }
+  setNetStatus("Connecting...", false);
+  const client = mqtt.connect(BROKERS[brokerIdx], {
+    clientId: myClientId,
+    clean: true,
+    connectTimeout: 4500,
+    reconnectPeriod: 3000
+  });
+
+  let settled = false;
+  let listenerBound = false;
+  const timer = setTimeout(() => {
+    if (!settled) {
+      try { client.end(true); } catch (e) {}
+      connectGlobalRelay(onReady, brokerIdx + 1);
+    }
+  }, 4800);
+
+  client.on("connect", () => {
+    settled = true;
+    clearTimeout(timer);
+    mqttClient = client;
+    setNetStatus("Connected", true);
+    client.subscribe(PRESENCE_TOPIC);
+    client.subscribe(LB_PLAYER_PREFIX + "+");
+    client.subscribe(WORLD_CHAT_TOPIC);
+    client.subscribe(PICO_STATUS_TOPIC);
+    client.subscribe(PICO_RES_TOPIC);
+    if (activeGroupCode) subscribeGroupTopic(activeGroupCode, false);
+    if (lobbyTopic) client.subscribe(lobbyTopic);
+    if (roomTopic) client.subscribe(roomTopic);
+
+    if (!listenerBound) {
+      listenerBound = true;
+      client.on("message", handleIncomingPacket);
+    }
+    sendHeartbeat();
+    publishLeaderboardRecord();
+    if (onReady) onReady();
+  });
+
+  client.on("error", () => {
+    if (!settled) {
+      clearTimeout(timer);
+      try { client.end(true); } catch (e) {}
+      connectGlobalRelay(onReady, brokerIdx + 1);
+    }
+  });
+}
+
+function clearMatchmakingState() {
+  searching = false;
+  pendingInvite = null;
+  lobbyPeers.clear();
+  if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+  if (joinRetryTimer) { clearInterval(joinRetryTimer); joinRetryTimer = null; }
+  document.getElementById("btnQuick").textContent = "Find Online Match";
+  if (mqttClient && mqttClient.connected) {
+    if (lobbyTopic) mqttClient.unsubscribe(lobbyTopic);
+    if (roomTopic) mqttClient.unsubscribe(roomTopic);
+  }
+  lobbyTopic = "";
+  roomTopic = "";
+  updateChatHeaderAndControls();
+}
+
+function sendRoomMsg(obj) {
+  if (!mqttClient || !mqttClient.connected || !roomTopic) return;
+  obj.sender = myClientId;
+  mqttClient.publish(roomTopic, JSON.stringify(obj));
+}
+
+saveMyProfileLocally();
+connectGlobalRelay();
+
+// ==========================================
+// 11. MODE LAUNCHERS (BOT / SPECTATE / ONLINE)
+// ==========================================
+function getBotMeta(val) {
+  if (val === "pico") return { name: "Pico 2 W Bot", elo: 1150 };
+  if (val === "1") return { name: "Casual Bot", elo: 1000 };
+  if (val === "2") return { name: "Club Bot", elo: 1400 };
+  if (val === "3") return { name: "Master Bot", elo: 1800 };
+  return { name: "Stockfish GM", elo: 2400 };
+}
+
+function startLocalBot() {
+  clearMatchmakingState();
+  const b1 = document.getElementById("bot1Select").value;
+  if (b1 === "pico" && !isPicoOnline()) {
+    setBanner("Pico 2 W is offline — plug it into Wi-Fi first!");
+    return;
+  }
+  mode = "bot";
+  botConfig = { 1: "3", 2: b1 };
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  const meta = getBotMeta(b1);
+  initMatch(selectedGame, t, meta.name, meta.elo, 1);
+}
+
+function startSpectateBots() {
+  clearMatchmakingState();
+  const b1 = document.getElementById("bot1Select").value;
+  const b2 = document.getElementById("bot2Select").value;
+  if ((b1 === "pico" || b2 === "pico") && !isPicoOnline()) {
+    setBanner("Pico 2 W is offline — plug it into Wi-Fi first!");
+    return;
+  }
+  mode = "spectate";
+  botConfig = { 1: b1, 2: b2 };
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  const m1 = getBotMeta(b1);
+  const m2 = getBotMeta(b2);
+  initMatch(selectedGame, t, `${m2.name} (Black)`, m2.elo, 1, `${m1.name} (White)`, m1.elo);
+  const mId = currentMatchId;
+  setTimeout(() => runBotTurn(1, mId), 500);
+}
+
+function findQuickMatch() {
+  if (searching) {
+    clearMatchmakingState();
+    setBanner("Matchmaking cancelled");
+    return;
+  }
+  clearMatchmakingState();
+  searching = true;
+  document.getElementById("btnQuick").textContent = "Cancel Search...";
+  const g = selectedGame;
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  const gameLabel = g === "chess" ? "Chess" : g === "checkers" ? "Checkers" : "Connect 4";
+  setBanner("Connecting to lobby...");
+
+  connectGlobalRelay(() => {
+    if (!searching) return;
+    lobbyTopic = `boardhub/v1/lobby/${g}`;
+    mqttClient.subscribe(lobbyTopic, () => {
+      setBanner(`Searching ${gameLabel} lobby...`);
+      const broadcastSeek = () => {
+        if (!searching || !mqttClient || !mqttClient.connected) return;
+        const now = Date.now();
+        for (const [pid, ts] of lobbyPeers.entries()) {
+          if (now - ts > 5000) lobbyPeers.delete(pid);
+        }
+        if (pendingInvite && now > pendingInvite.expires) {
+          if (roomTopic && roomTopic.endsWith(pendingInvite.roomId)) {
+            mqttClient.unsubscribe(roomTopic);
+            roomTopic = "";
+          }
+          pendingInvite = null;
+        }
+        const qCount = lobbyPeers.size;
+        setBanner(
+          qCount > 0
+            ? `Searching ${gameLabel}... (${qCount} other${qCount === 1 ? "" : "s"} in queue)`
+            : `Searching ${gameLabel} lobby...`
+        );
+        mqttClient.publish(lobbyTopic, JSON.stringify({
+          type: "seek",
+          sender: myClientId,
+          playerName,
+          playerElo,
+          time: t
+        }));
+      };
+      broadcastSeek();
+      seekTimer = setInterval(broadcastSeek, 1500);
+    });
+  });
+}
+
+function hostFriendRoom() {
+  clearMatchmakingState();
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  const g = selectedGame;
+  const t = parseInt(document.getElementById("timeSelect").value, 10);
+  setBanner("Creating room...");
+
+  connectGlobalRelay(() => {
+    mode = "host";
+    roomTopic = `boardhub/v1/room/${code}`;
+    mqttClient.subscribe(roomTopic, () => {
+      initMatch(g, t, "Waiting...", 1200, 1);
+      setBanner(`Room Code: ${code} — Share with friend!`);
+    });
+  });
+}
+
+function joinFriendRoom() {
+  const code = document.getElementById("codeInput").value.trim();
+  if (code.length !== 4) {
+    setBanner("Enter a 4-digit room code first");
+    return;
+  }
+  clearMatchmakingState();
+  setBanner(`Joining room ${code}...`);
+
+  connectGlobalRelay(() => {
+    mode = "guest";
+    roomTopic = `boardhub/v1/room/${code}`;
+    mqttClient.subscribe(roomTopic, () => {
+      const sendHello = () => {
+        if (mode === "guest" && roomTopic === `boardhub/v1/room/${code}`) {
+          sendRoomMsg({ type: "hello", playerName, playerElo });
+        }
+      };
+      sendHello();
+      joinRetryTimer = setInterval(sendHello, 1200);
+    });
+  });
+}
+
+function handleIncomingPacket(topic, payloadBuf) {
+  const rawStr = payloadBuf ? payloadBuf.toString() : "";
+
+  if (topic.startsWith(LB_PLAYER_PREFIX)) {
+    const targetId = topic.slice(LB_PLAYER_PREFIX.length);
+    if (!rawStr) {
+      if (targetId && leaderboardMap.delete(targetId)) {
+        saveLeaderboardCache();
+        renderLeaderboard();
+      }
+      return;
+    }
+    let lbMsg;
+    try {
+      lbMsg = JSON.parse(rawStr);
+    } catch (e) {
+      return;
+    }
+    if (!lbMsg || lbMsg.deleted) {
+      if (targetId && leaderboardMap.delete(targetId)) {
+        saveLeaderboardCache();
+        renderLeaderboard();
+      }
+      return;
+    }
+    if (lbMsg.id && lbMsg.name) {
+      if (lbMsg.id === deviceId) return;
+      const prev = leaderboardMap.get(lbMsg.id);
+      if (!prev || (lbMsg.updated || 0) >= (prev.updated || 0)) {
+        leaderboardMap.set(lbMsg.id, lbMsg);
+        saveLeaderboardCache();
+        renderLeaderboard();
+      }
+    }
+    return;
+  }
+
+  let msg;
+  try {
+    msg = JSON.parse(rawStr);
+  } catch (e) {
+    return;
+  }
+  if (!msg) return;
+
+  if (topic === PICO_STATUS_TOPIC) {
+    lastPicoSeen = Date.now();
+    return;
+  }
+  if (topic === PICO_RES_TOPIC) {
+    lastPicoSeen = Date.now();
+    if (pendingPicoReq && msg.reqId === pendingPicoReq.reqId) {
+      const { botSide, reqMatchId } = pendingPicoReq;
+      pendingPicoReq = null;
+      if (reqMatchId !== currentMatchId || winner !== 0) return;
+
+      if (msg.game === "chess" && msg.uci) {
+        executeMove({
+          from: msg.uci.slice(0, 2),
+          to: msg.uci.slice(2, 4),
+          promotion: msg.uci[4] || "q"
+        }, botSide, false);
+      } else if (msg.game === "checkers" && msg.move) {
+        executeMove(msg.move, botSide, false);
+      } else if (msg.game === "c4" && msg.move) {
+        executeMove(msg.move, botSide, false);
+      }
+    }
+    return;
+  }
+
+  if (topic === PRESENCE_TOPIC) {
+    if (msg.type === "hb" && msg.id) {
+      const isNew = !onlinePeers.has(msg.id);
+      onlinePeers.set(msg.id, Date.now());
+      updateOnlineCounterUI();
+      if (isNew && msg.id !== myClientId && Date.now() - lastPresenceReply > 2000) {
+        lastPresenceReply = Date.now();
+        sendHeartbeat();
+      }
+    }
+    return;
+  }
+
+  if (msg.sender === myClientId) return;
+
+  // Worldwide Chat & OP Moderation Incoming
+  if (topic === WORLD_CHAT_TOPIC) {
+    if (msg.type === "world_clear") {
+      clearChannelLocal("world", filterChatText(String(msg.by || "Admin").slice(0, 16)));
+    } else if (msg.type === "world_announce" && msg.text) {
+      appendChatMessage("world", { announce: true, text: String(msg.text).slice(0, 160) }, true);
+    } else if (msg.type === "world_chat" && msg.text) {
+      appendChatMessage("world", {
+        mine: false,
+        name: String(msg.name || "Player").slice(0, 16),
+        elo: msg.elo || 1200,
+        text: String(msg.text).slice(0, 160)
+      }, true);
+    }
+    return;
+  }
+
+  // Group Chat & OP Clear Incoming
+  if (activeGroupCode && topic === GROUP_CHAT_PREFIX + activeGroupCode) {
+    if (msg.type === "group_clear") {
+      clearChannelLocal("group", filterChatText(String(msg.by || "Admin").slice(0, 16)));
+    } else if (msg.type === "group_chat" && msg.text) {
+      appendChatMessage("group", {
+        mine: false,
+        name: String(msg.name || "Friend").slice(0, 16),
+        elo: msg.elo || 1200,
+        text: String(msg.text).slice(0, 160)
+      }, true);
+    } else if (msg.type === "group_sys" && msg.text) {
+      appendChatMessage("group", { sys: true, text: filterChatText(String(msg.text).slice(0, 120)) });
+    }
+    return;
+  }
+
+  // Two-Step Deadlock-Free Lobby Matchmaking
+  if (topic === lobbyTopic && searching) {
+    const g = selectedGame;
+    const t = parseInt(document.getElementById("timeSelect").value, 10);
+
+    if (msg.type === "seek") {
+      lobbyPeers.set(msg.sender, Date.now());
+      if (pendingInvite && Date.now() > pendingInvite.expires) {
+        pendingInvite = null;
+      }
+      if (!pendingInvite && myClientId < msg.sender) {
+        const roomId = `m_${myClientId}_${msg.sender}_${Date.now().toString(36)}`;
+        pendingInvite = {
+          peerId: msg.sender,
+          peerName: msg.playerName || "Opponent",
+          peerElo: msg.playerElo || 1200,
+          roomId,
+          time: t,
+          expires: Date.now() + 2800
+        };
+        if (roomTopic) mqttClient.unsubscribe(roomTopic);
+        roomTopic = `boardhub/v1/room/${roomId}`;
+        mqttClient.subscribe(roomTopic, () => {
+          mqttClient.publish(lobbyTopic, JSON.stringify({
+            type: "invite",
+            sender: myClientId,
+            target: msg.sender,
+            roomId,
+            playerName,
+            playerElo,
+            time: t
+          }));
+        });
+      }
+    } else if (msg.type === "invite" && msg.target === myClientId) {
+      // Accept invite unless we already sent a higher-priority invite to an even smaller ID
+      if (pendingInvite && pendingInvite.peerId < msg.sender && Date.now() < pendingInvite.expires) {
+        return;
+      }
+      if (pendingInvite && roomTopic) {
+        mqttClient.unsubscribe(roomTopic);
+      }
+      searching = false;
+      pendingInvite = null;
+      lobbyPeers.clear();
+      if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+      document.getElementById("btnQuick").textContent = "Find Online Match";
+
+      const confirmedRoom = `boardhub/v1/room/${msg.roomId}`;
+      roomTopic = confirmedRoom;
+      mode = "guest";
+
+      mqttClient.publish(lobbyTopic, JSON.stringify({
+        type: "accept",
+        sender: myClientId,
+        target: msg.sender,
+        roomId: msg.roomId,
+        playerName,
+        playerElo
+      }));
+      mqttClient.unsubscribe(lobbyTopic);
+      lobbyTopic = "";
+
+      mqttClient.subscribe(roomTopic, () => {
+        setBanner(`Connecting to ${filterChatText(msg.playerName || "Opponent")}...`);
+        const pingReady = () => {
+          if (mode === "guest" && roomTopic === confirmedRoom) {
+            sendRoomMsg({ type: "guest_ready", playerName, playerElo });
+          }
+        };
+        pingReady();
+        if (joinRetryTimer) clearInterval(joinRetryTimer);
+        joinRetryTimer = setInterval(pingReady, 1000);
+      });
+    } else if (msg.type === "accept" && msg.target === myClientId && pendingInvite && msg.roomId === pendingInvite.roomId) {
+      const inv = pendingInvite;
+      searching = false;
+      pendingInvite = null;
+      lobbyPeers.clear();
+      if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+      document.getElementById("btnQuick").textContent = "Find Online Match";
+      mqttClient.unsubscribe(lobbyTopic);
+      lobbyTopic = "";
+
+      mode = "host";
+      initMatch(g, inv.time, msg.playerName || inv.peerName, msg.playerElo || inv.peerElo, 1);
+      appendChatMessage("match", { sys: true, text: `Matched vs ${filterChatText(msg.playerName || inv.peerName)}!` });
+      sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
+    }
+    return;
+  }
+
+  if (topic === roomTopic) {
+    if (msg.type === "match_clear") {
+      clearChannelLocal("match", filterChatText(String(msg.by || "Admin").slice(0, 16)));
+      return;
+    }
+    if (msg.type === "match_chat" && msg.text) {
+      appendChatMessage("match", {
+        mine: false,
+        name: String(msg.name || opponentName || "Opponent").slice(0, 16),
+        elo: msg.elo || opponentEloVal || 1200,
+        text: String(msg.text).slice(0, 160)
+      }, true);
+      return;
+    }
+
+    // Fallback: if guest_ready arrives in roomTopic before lobby accept
+    if (searching && pendingInvite && msg.type === "guest_ready" && msg.sender === pendingInvite.peerId) {
+      const inv = pendingInvite;
+      searching = false;
+      pendingInvite = null;
+      lobbyPeers.clear();
+      if (seekTimer) { clearInterval(seekTimer); seekTimer = null; }
+      document.getElementById("btnQuick").textContent = "Find Online Match";
+      if (lobbyTopic) { mqttClient.unsubscribe(lobbyTopic); lobbyTopic = ""; }
+
+      mode = "host";
+      initMatch(selectedGame, inv.time, msg.playerName || inv.peerName, msg.playerElo || inv.peerElo, 1);
+      appendChatMessage("match", { sys: true, text: `Matched vs ${filterChatText(msg.playerName || inv.peerName)}!` });
+      sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
+      return;
+    }
+
+    if (mode === "host") {
+      if (msg.type === "guest_ready") {
+        sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
+      } else if (msg.type === "hello") {
+        if (opponentName === "Waiting..." || moveLog.length === 0) {
+          initMatch(gameType, baseTime, msg.playerName || "Friend", msg.playerElo || 1200, 1);
+          appendChatMessage("match", { sys: true, text: `${filterChatText(msg.playerName || "Friend")} joined the room!` });
+        }
+        sendRoomMsg({ type: "welcome", payload: buildSyncPayload() });
+      } else if (msg.type === "move") {
+        executeMove(msg.move, 2, true);
+      } else if (msg.type === "resign") {
+        finishMatch(1, "by resignation");
+        syncToPeer();
+      } else if (msg.type === "op_gg") {
+        finishMatch(msg.winnerSide === 2 ? 2 : 1, "by OP command");
+        syncToPeer();
+      } else if (msg.type === "op_draw") {
+        finishMatch(3, "by OP command");
+        syncToPeer();
+      } else if (msg.type === "draw_offer") {
+        if (confirm(`${opponentName} offers a draw. Accept?`)) {
+          finishMatch(3, "by agreement");
+          syncToPeer();
+        }
+      } else if (msg.type === "draw_accept") {
+        finishMatch(3, "by agreement");
+        syncToPeer();
+      } else if (msg.type === "rematch") {
+        initMatch(gameType, baseTime, opponentName, opponentEloVal, mySide === 1 ? 2 : 1);
+        syncToPeer();
+      }
+    } else if (mode === "guest") {
+      if (msg.type === "welcome" || msg.type === "sync") {
+        if (joinRetryTimer) {
+          clearInterval(joinRetryTimer);
+          joinRetryTimer = null;
+          appendChatMessage("match", { sys: true, text: `Connected vs ${filterChatText(msg.payload.hostName || "Opponent")}!` });
+        }
+        applySync(msg.payload);
+      } else if (msg.type === "draw_offer") {
+        if (confirm(`${opponentName} offers a draw. Accept?`)) {
+          sendRoomMsg({ type: "draw_accept" });
+        }
+      }
+    }
+  }
+}
+
+function buildSyncPayload() {
+  return {
+    gameType, baseTime, clocks, winner, endReason,
+    hostName: playerName,
+    hostElo: playerElo,
+    guestSide: mySide === 1 ? 2 : 1,
+    fen: chess.fen(),
+    chkBoard, chkTurn, c4Board, c4Turn,
+    lastMove, moveLog
+  };
+}
+
+function syncToPeer() {
+  if (mode === "host") {
+    sendRoomMsg({ type: "sync", payload: buildSyncPayload() });
+  }
+}
+
+function applySync(p) {
+  const isNewMatch = (p.moveLog.length === 0 && moveLog.length > 0) || (p.gameType !== gameType);
+  if (isNewMatch) {
+    currentMatchId++;
+    ratingApplied = false;
+    ratingDeltaText = "";
+  }
+  const prevLen = moveLog.length;
+  gameType = p.gameType;
+  selectedGame = p.gameType;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + gameType).classList.add("active");
+
+  baseTime = p.baseTime;
+  clocks = p.clocks;
+  opponentName = filterChatText(p.hostName || "Opponent");
+  opponentEloVal = p.hostElo || 1200;
+  bottomTitle = `${playerName} (You)`;
+  bottomEloVal = playerElo;
+  mySide = p.guestSide;
+  if (gameType === "chess") chess.load(p.fen);
+  chkBoard = p.chkBoard;
+  chkTurn = p.chkTurn;
+  c4Board = p.c4Board;
+  c4Turn = p.c4Turn;
+  lastMove = p.lastMove;
+  moveLog = p.moveLog;
+
+  if (p.winner !== 0 && winner === 0) {
+    winner = p.winner;
+    endReason = p.endReason;
+    ratingDeltaText = applyRatedResult(p.winner);
+    bottomEloVal = playerElo;
+    playSound("end");
+  } else if (p.winner === 0) {
+    winner = 0;
+    endReason = "";
+    ratingApplied = false;
+    ratingDeltaText = "";
+  }
+
+  document.getElementById("btnSpectate").classList.remove("spectate-active");
+  document.getElementById("btnDraw").disabled = false;
+  document.getElementById("btnResign").disabled = false;
+  document.getElementById("btnRematch").disabled = false;
+
+  updateChatHeaderAndControls();
+  if (moveLog.length > prevLen && winner === 0) playSound("move");
+  startClockLoop();
+  renderAll();
+}
+
+// ==========================================
+// 12. MOVE EXECUTION & RULES (CHESS / CHK / C4)
+// ==========================================
+function requestMove(mv) {
+  if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
+  if (mode === "guest") {
+    sendRoomMsg({ type: "move", move: mv });
+  } else {
+    executeMove(mv, mySide, true);
+  }
+}
+
+function executeMove(mv, side, triggerNextBot) {
+  if (winner !== 0 || getCurrentTurn() !== side) return false;
+
+  if (gameType === "chess") {
+    const res = chess.move(mv);
+    if (!res) return false;
+    lastMove = [res.from, res.to];
+    moveLog.push(res.san);
+    playSound(chess.in_check() ? "check" : (res.captured ? "capture" : "move"));
+
+    if (chess.game_over()) {
+      if (chess.in_checkmate()) finishMatch(side, "by checkmate");
+      else finishMatch(3, "by draw");
+    }
+  } else if (gameType === "checkers") {
+    const legal = getCheckersMoves(chkBoard, side);
+    const match = legal.find(m => m.r1 === mv.r1 && m.c1 === mv.c1 && m.r2 === mv.r2 && m.c2 === mv.c2);
+    if (!match) return false;
+    applyCheckersMove(chkBoard, match);
+    lastMove = [`${match.r1},${match.c1}`, `${match.r2},${match.c2}`];
+    moveLog.push(`${String.fromCharCode(97 + match.c1)}${8 - match.r1}→${String.fromCharCode(97 + match.c2)}${8 - match.r2}`);
+    playSound(match.jump ? "capture" : "move");
+
+    chkTurn = 3 - side;
+    if (getCheckersMoves(chkBoard, chkTurn).length === 0) {
+      finishMatch(side, "no moves left");
+    }
+  } else if (gameType === "c4") {
+    const r = dropC4(c4Board, mv.col, side);
+    if (r === -1) return false;
+    lastMove = [`${r},${mv.col}`];
+    moveLog.push(`Col ${mv.col + 1}`);
+    playSound("move");
+
+    if (checkC4Win(c4Board, r, mv.col, side)) {
+      finishMatch(side, "4 in a row");
+    } else if (c4Board[0].every(x => x !== 0)) {
+      finishMatch(3, "board full");
+    } else {
+      c4Turn = 3 - side;
+    }
+  }
+
+  selected = null;
+  legalTargets = [];
+  renderAll();
+  syncToPeer();
+
+  if (winner === 0) {
+    const nextSide = getCurrentTurn();
+    const mId = currentMatchId;
+    if (mode === "bot" && triggerNextBot && nextSide === 2) {
+      setTimeout(() => runBotTurn(2, mId), 300);
+    } else if (mode === "spectate") {
+      setTimeout(() => runBotTurn(nextSide, mId), 550);
+    }
+  }
+  return true;
+}
+
+// ==========================================
+// 13. PICO WIFI BOT + STOCKFISH + MINIMAX
+// ==========================================
+function askPicoForMove(botSide, reqMatchId) {
+  if (!mqttClient || !mqttClient.connected) {
+    setBanner("Relay offline — cannot reach Pico 2 W");
+    return;
+  }
+  const reqId = `${myClientId}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+  pendingPicoReq = { reqId, botSide, reqMatchId };
+
+  let payload = { reqId, game: gameType };
+  if (gameType === "chess") payload.fen = chess.fen();
+  else if (gameType === "checkers") { payload.board = chkBoard; payload.side = botSide; }
+  else if (gameType === "c4") { payload.board = c4Board; payload.side = botSide; }
+
+  const raw = JSON.stringify(payload);
+  mqttClient.publish(PICO_REQ_TOPIC, raw);
+
+  setTimeout(() => {
+    if (pendingPicoReq && pendingPicoReq.reqId === reqId && reqMatchId === currentMatchId && winner === 0) {
+      mqttClient.publish(PICO_REQ_TOPIC, raw);
+    }
+  }, 3500);
+}
+
+function runBotTurn(botSide, reqMatchId) {
+  if (reqMatchId !== currentMatchId || winner !== 0 || getCurrentTurn() !== botSide) return;
+  const choice = botConfig[botSide];
+
+  if (choice === "pico") {
+    askPicoForMove(botSide, reqMatchId);
+    return;
+  }
+
+  const lvl = parseInt(choice, 10) || 3;
+
+  if (gameType === "chess") {
+    const moves = chess.moves({ verbose: true });
+    if (!moves.length) return;
+
+    if (mode === "spectate" && moveLog.length < 2) {
+      const openings = moves.filter(m => ["e4","d4","c4","Nf3","e5","c5","e6","d5","Nf6"].includes(m.san));
+      const pool = openings.length ? openings : moves;
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      executeMove({ from: pick.from, to: pick.to, promotion: "q" }, botSide, false);
+      return;
+    }
+
+    if (sfWorker && sfReady) {
+      const skillMap = { 1: 1, 2: 7, 3: 14, 4: 20 };
+      const depthMap = { 1: 3, 2: 7, 3: 11, 4: 15 };
+      sfCallback = (uci) => {
+        if (reqMatchId !== currentMatchId || winner !== 0) return;
+        executeMove({
+          from: uci.slice(0, 2),
+          to: uci.slice(2, 4),
+          promotion: uci[4] || "q"
+        }, botSide, false);
+      };
+      sfWorker.postMessage(`setoption name Skill Level value ${skillMap[lvl]}`);
+      sfWorker.postMessage(`position fen ${chess.fen()}`);
+      sfWorker.postMessage(`go depth ${depthMap[lvl]}`);
+    } else {
+      const depth = lvl >= 3 ? 2 : 1;
+      const isMax = (botSide === 1);
+      let bestScore = isMax ? -Infinity : Infinity;
+      let bestMoves = [];
+      for (const m of moves) {
+        chess.move(m);
+        const score = minimaxChess(depth - 1, -Infinity, Infinity, !isMax);
+        chess.undo();
+        if ((isMax && score > bestScore) || (!isMax && score < bestScore)) {
+          bestScore = score;
+          bestMoves = [m];
+        } else if (score === bestScore) {
+          bestMoves.push(m);
+        }
+      }
+      const pick = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+      executeMove({ from: pick.from, to: pick.to, promotion: pick.promotion || "q" }, botSide, false);
+    }
+  } else if (gameType === "checkers") {
+    const moves = getCheckersMoves(chkBoard, botSide);
+    if (!moves.length) return;
+    const pick = moves[Math.floor(Math.random() * moves.length)];
+    executeMove(pick, botSide, false);
+  } else if (gameType === "c4") {
+    const valid = [0,1,2,3,4,5,6].filter(c => c4Board[0][c] === 0);
+    if (!valid.length) return;
+    if (mode === "spectate" && moveLog.length === 0) {
+      executeMove({ col: valid[Math.floor(Math.random() * valid.length)] }, botSide, false);
+      return;
+    }
+    const opp = 3 - botSide;
+    for (const p of [botSide, opp]) {
+      for (const c of valid) {
+        const copy = c4Board.map(r => [...r]);
+        const r = dropC4(copy, c, p);
+        if (checkC4Win(copy, r, c, p)) {
+          executeMove({ col: c }, botSide, false);
+          return;
+        }
+      }
+    }
+    valid.sort((a, b) => Math.abs(3 - a) - Math.abs(3 - b));
+    executeMove({ col: valid[0] }, botSide, false);
+  }
+}
+
+const PST_PAWN = [
+  [0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],
+  [5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],
+  [5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]
+];
+
+function evalChessBoard() {
+  if (chess.in_checkmate()) return chess.turn() === "w" ? -99999 : 99999;
+  if (chess.in_draw()) return 0;
+  let total = 0;
+  const b = chess.board();
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = b[r][c];
+      if (!p) continue;
+      let v = PIECE_VAL[p.type];
+      if (p.type === "p") v += p.color === "w" ? PST_PAWN[r][c] : PST_PAWN[7 - r][c];
+      else if (r >= 2 && r <= 5 && c >= 2 && c <= 5) v += 15;
+      total += p.color === "w" ? v : -v;
+    }
+  }
+  return total;
+}
+
+function minimaxChess(depth, alpha, beta, isMax) {
+  if (depth === 0 || chess.game_over()) return evalChessBoard();
+  const moves = chess.moves({ verbose: true });
+  if (isMax) {
+    let maxEval = -Infinity;
+    for (const m of moves) {
+      chess.move(m);
+      maxEval = Math.max(maxEval, minimaxChess(depth - 1, alpha, beta, false));
+      chess.undo();
+      alpha = Math.max(alpha, maxEval);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const m of moves) {
+      chess.move(m);
+      minEval = Math.min(minEval, minimaxChess(depth - 1, alpha, beta, true));
+      chess.undo();
+      beta = Math.min(beta, minEval);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
+function getCheckersMoves(b, side) {
+  const steps = [], jumps = [];
+  const mine = side === 1 ? [1, 3] : [2, 4];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const v = b[r][c];
+      if (!mine.includes(v)) continue;
+      const dirs = v > 2 ? [[-1,-1],[-1,1],[1,-1],[1,1]] : (side === 1 ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]]);
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+          if (b[nr][nc] === 0) steps.push({ r1: r, c1: c, r2: nr, c2: nc, jump: false });
+          else if (!mine.includes(b[nr][nc])) {
+            const jr = r + dr * 2, jc = c + dc * 2;
+            if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8 && b[jr][jc] === 0) {
+              jumps.push({ r1: r, c1: c, r2: jr, c2: jc, jump: true });
+            }
+          }
+        }
+      }
+    }
+  }
+  return jumps.length ? jumps : steps;
+}
+
+function applyCheckersMove(b, m) {
+  let v = b[m.r1][m.c1];
+  b[m.r1][m.c1] = 0;
+  if ((v === 1 && m.r2 === 0) || (v === 2 && m.r2 === 7)) v += 2;
+  b[m.r2][m.c2] = v;
+  if (m.jump) b[(m.r1 + m.r2) / 2][(m.c1 + m.c2) / 2] = 0;
+}
+
+function dropC4(b, col, side) {
+  if (col < 0 || col > 6 || b[0][col] !== 0) return -1;
+  for (let r = 5; r >= 0; r--) {
+    if (b[r][col] === 0) { b[r][col] = side; return r; }
+  }
+  return -1;
+}
+
+function checkC4Win(b, r, c, side) {
+  for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+    let cnt = 1;
+    for (const s of [-1, 1]) {
+      let nr = r + dr * s, nc = c + dc * s;
+      while (nr >= 0 && nr < 6 && nc >= 0 && nc < 7 && b[nr][nc] === side) {
+        cnt++; nr += dr * s; nc += dc * s;
+      }
+    }
+    if (cnt >= 4) return true;
+  }
+  return false;
+}
+
+// ==========================================
+// 14. MATCH ACTIONS (DRAW, RESIGN, REMATCH)
+// ==========================================
+function resignGame() {
+  if (winner !== 0 || mode === "spectate") return;
+  if (mode === "guest") {
+    sendRoomMsg({ type: "resign" });
+  } else {
+    finishMatch(3 - mySide, "by resignation");
+    syncToPeer();
+  }
+}
+
+function offerDraw() {
+  if (winner !== 0 || mode === "bot" || mode === "spectate") return;
+  sendRoomMsg({ type: "draw_offer" });
+  setBanner("Draw offer sent...");
+}
+
+function requestRematch() {
+  if (mode === "spectate") {
+    startSpectateBots();
+  } else if (mode === "bot") {
+    startLocalBot();
+  } else if (mode === "host") {
+    initMatch(gameType, baseTime, opponentName, opponentEloVal, mySide === 1 ? 2 : 1);
+    syncToPeer();
+  } else if (mode === "guest") {
+    sendRoomMsg({ type: "rematch" });
+  }
+}
+
+// ==========================================
+// 15. RENDER BOARD, CAPTURED PIECES & UI
+// ==========================================
+function setBanner(msg) {
+  document.getElementById("statusBanner").textContent = msg;
+}
+
+function updateClockUI() {
+  const oppSide = 3 - mySide;
+  const turn = getCurrentTurn();
+  const topEl = document.getElementById("topClock");
+  const botEl = document.getElementById("botClock");
+
+  topEl.textContent = formatClock(clocks[oppSide]);
+  botEl.textContent = formatClock(clocks[mySide]);
+
+  topEl.className = "timer" + (winner === 0 && turn === oppSide ? " active" : "") + (clocks[oppSide] <= 10 && baseTime > 0 ? " low" : "");
+  botEl.className = "timer" + (winner === 0 && turn === mySide ? " active" : "") + (clocks[mySide] <= 10 && baseTime > 0 ? " low" : "");
+}
+
+function updateCapturedUI() {
+  const topCap = document.getElementById("topCap");
+  const botCap = document.getElementById("botCap");
+  if (gameType !== "chess") { topCap.innerHTML = ""; botCap.innerHTML = ""; return; }
+
+  const start = { p:8, n:2, b:2, r:2, q:1 };
+  const curW = { p:0, n:0, b:0, r:0, q:0 };
+  const curB = { p:0, n:0, b:0, r:0, q:0 };
+  for (const row of chess.board()) {
+    for (const sq of row) {
+      if (!sq || sq.type === "k") continue;
+      if (sq.color === "w") curW[sq.type]++; else curB[sq.type]++;
+    }
+  }
+  let wLostHTML = "", bLostHTML = "", wMat = 0, bMat = 0;
+  for (const t of ["q","r","b","n","p"]) {
+    const mw = Math.max(0, start[t] - curW[t]);
+    const mb = Math.max(0, start[t] - curB[t]);
+    wLostHTML += getPieceSVG("w", t, "cap-icon").repeat(mw);
+    bLostHTML += getPieceSVG("b", t, "cap-icon").repeat(mb);
+    wMat += curW[t] * (PIECE_VAL[t] / 100);
+    bMat += curB[t] * (PIECE_VAL[t] / 100);
+  }
+  const diff = Math.round(wMat - bMat);
+  const wStr = bLostHTML + (diff > 0 ? `<span style="margin-left:4px">+${diff}</span>` : "");
+  const bStr = wLostHTML + (diff < 0 ? `<span style="margin-left:4px">+${Math.abs(diff)}</span>` : "");
+  botCap.innerHTML = mySide === 1 ? wStr : bStr;
+  topCap.innerHTML = mySide === 1 ? bStr : wStr;
+}
+
+function renderAll() {
+  const oppSide = 3 - mySide;
+  document.getElementById("botName").textContent = mode === "spectate" ? bottomTitle : `${playerName} (You)`;
+  document.getElementById("botElo").textContent = mode === "spectate" ? bottomEloVal : playerElo;
+  document.getElementById("topName").textContent = opponentName;
+  document.getElementById("topElo").textContent = opponentEloVal;
+  document.getElementById("botAvatar").textContent = mode === "spectate" ? "AI" : (mySide === 1 ? "P1" : "P2");
+  document.getElementById("topAvatar").textContent = mode === "spectate" ? "AI" : (oppSide === 1 ? "P1" : "P2");
+  document.getElementById("stripSetNameBtn").style.display = (nameLocked || mode === "spectate") ? "none" : "inline-block";
+
+  updateClockUI();
+  updateCapturedUI();
+
+  if (winner === 3) {
+    setBanner(`Draw (${endReason})${ratingDeltaText}`);
+  } else if (winner !== 0) {
+    if (mode === "spectate") {
+      setBanner(`${winner === 1 ? bottomTitle : opponentName} Won ${endReason}`);
+    } else {
+      const baseMsg = winner === mySide ? `You Won ${endReason}!` : `${opponentName} Won ${endReason}`;
+      setBanner(baseMsg + ratingDeltaText);
+    }
+  } else {
+    const turn = getCurrentTurn();
+    const chk = (gameType === "chess" && chess.in_check()) ? " — CHECK!" : "";
+    if (mode === "spectate") {
+      setBanner(`Spectating: ${turn === 1 ? bottomTitle : opponentName}${chk}`);
+    } else {
+      setBanner((turn === mySide ? "Your Turn" : `${opponentName} thinking`) + chk);
+    }
+  }
+
+  const box = document.getElementById("movesBox");
+  box.innerHTML = "";
+  for (let i = 0; i < moveLog.length; i += 2) {
+    const row = document.createElement("div");
+    row.className = "m-row";
+    row.innerHTML = `<span class="m-idx">${Math.floor(i/2)+1}.</span><span>${moveLog[i]}</span><span>${moveLog[i+1] || ""}</span>`;
+    box.appendChild(row);
+  }
+  box.scrollTop = box.scrollHeight;
+
+  renderBoard();
+}
+
+function renderBoard() {
+  const bd = document.getElementById("board");
+  bd.innerHTML = "";
+
+  if (gameType === "c4") {
+    bd.style.gridTemplateColumns = "repeat(7, 1fr)";
+    bd.style.gridTemplateRows = "repeat(6, 1fr)";
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 7; c++) {
+        const sq = document.createElement("div");
+        sq.className = "c4-sq";
+        const hole = document.createElement("div");
+        const v = c4Board[r][c];
+        hole.className = "c4-hole" + (v === 1 ? " p1" : v === 2 ? " p2" : "");
+        sq.appendChild(hole);
+        sq.onclick = () => requestMove({ col: c });
+        bd.appendChild(sq);
+      }
+    }
+    return;
+  }
+
+  bd.style.gridTemplateColumns = "repeat(8, 1fr)";
+  bd.style.gridTemplateRows = "repeat(8, 1fr)";
+  const rows = mySide === 2 ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const cols = mySide === 2 ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+
+  if (gameType === "chess") {
+    const b = chess.board();
+    const inCheck = chess.in_check();
+    const turnColor = chess.turn();
+
+    for (let ri = 0; ri < 8; ri++) {
+      for (let ci = 0; ci < 8; ci++) {
+        const r = rows[ri], c = cols[ci];
+        const sqName = String.fromCharCode(97 + c) + (8 - r);
+        const piece = b[r][c];
+        const sq = document.createElement("div");
+
+        let cls = "sq " + ((r + c) % 2 === 0 ? "light" : "dark");
+        if (lastMove && lastMove.includes(sqName)) cls += " last";
+        if (selected === sqName) cls += " sel";
+        if (inCheck && piece && piece.type === "k" && piece.color === turnColor) cls += " check";
+        sq.className = cls;
+
+        if (ci === 0) {
+          const rk = document.createElement("span");
+          rk.className = "coord rank"; rk.textContent = 8 - r;
+          sq.appendChild(rk);
+        }
+        if (ri === 7) {
+          const fl = document.createElement("span");
+          fl.className = "coord file"; fl.textContent = String.fromCharCode(97 + c);
+          sq.appendChild(fl);
+        }
+
+        if (piece) {
+          sq.insertAdjacentHTML("beforeend", getPieceSVG(piece.color, piece.type));
+        }
+
+        const targetMove = legalTargets.find(m => m.to === sqName);
+        if (targetMove) {
+          const marker = document.createElement("div");
+          marker.className = piece ? "ring" : "dot";
+          sq.appendChild(marker);
+        }
+
+        sq.onclick = () => onChessSquareClick(sqName, piece);
+        bd.appendChild(sq);
+      }
+    }
+  } else if (gameType === "checkers") {
+    for (let ri = 0; ri < 8; ri++) {
+      for (let ci = 0; ci < 8; ci++) {
+        const r = rows[ri], c = cols[ci];
+        const key = `${r},${c}`;
+        const v = chkBoard[r][c];
+        const sq = document.createElement("div");
+        let cls = "sq " + ((r + c) % 2 === 0 ? "light" : "dark");
+        if (lastMove && lastMove.includes(key)) cls += " last";
+        if (selected === key) cls += " sel";
+        sq.className = cls;
+
+        if (v) {
+          const disc = document.createElement("div");
+          disc.className = "chk-disc " + (v % 2 === 1 ? "p1" : "p2");
+          disc.textContent = v > 2 ? "K" : "";
+          sq.appendChild(disc);
+        }
+
+        const targetMove = legalTargets.find(m => m.r2 === r && m.c2 === c);
+        if (targetMove) {
+          const dot = document.createElement("div");
+          dot.className = "dot";
+          sq.appendChild(dot);
+        }
+
+        sq.onclick = () => onCheckersSquareClick(r, c, v);
+        bd.appendChild(sq);
+      }
+    }
+  }
+}
+
+function onChessSquareClick(sqName, piece) {
+  if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
+  const myColor = mySide === 1 ? "w" : "b";
+
+  const target = legalTargets.find(m => m.to === sqName);
+  if (target) {
+    if (target.flags.includes("p")) {
+      showPromotionPicker(target.from, target.to, myColor);
+    } else {
+      requestMove({ from: target.from, to: target.to });
+    }
+    return;
+  }
+
+  if (piece && piece.color === myColor) {
+    selected = sqName;
+    legalTargets = chess.moves({ square: sqName, verbose: true });
+  } else {
+    selected = null;
+    legalTargets = [];
+  }
+  renderBoard();
+}
+
+function showPromotionPicker(from, to, color) {
+  const modal = document.getElementById("promoModal");
+  const box = document.getElementById("promoChoices");
+  box.innerHTML = "";
+  for (const p of ["q", "r", "b", "n"]) {
+    const btn = document.createElement("button");
+    btn.className = "promo-btn";
+    btn.innerHTML = getPieceSVG(color, p);
+    btn.onclick = () => {
+      modal.style.display = "none";
+      requestMove({ from, to, promotion: p });
+    };
+    box.appendChild(btn);
+  }
+  modal.style.display = "flex";
+}
+
+function onCheckersSquareClick(r, c, v) {
+  if (mode === "spectate" || winner !== 0 || getCurrentTurn() !== mySide) return;
+  const target = legalTargets.find(m => m.r2 === r && m.c2 === c);
+  if (target) {
+    requestMove(target);
+    return;
+  }
+  const isMine = v && (v % 2 === (mySide === 1 ? 1 : 0));
+  if (isMine) {
+    selected = `${r},${c}`;
+    legalTargets = getCheckersMoves(chkBoard, mySide).filter(m => m.r1 === r && m.c1 === c);
+  } else {
+    selected = null;
+    legalTargets = [];
+  }
+  renderBoard();
+}
+
+startLocalBot();
+</script>
+<footer style="max-width:860px;text-align:center;color:#64748b;font-size:12px;padding:16px 16px 28px;line-height:1.5;">
+  <strong>BoardHub Arena</strong> — Free online Chess, Checkers, and Connect 4.<br>
+  <strong>Privacy & Rules:</strong> No tracking cookies are used; stats and themes are saved locally on your device. Chat messages and leaderboard stats are public—please keep chat respectful and never share personal information.
+</footer>
+</body>
+</html>
   <meta name="description" content="Play free online Chess, Checkers, and Connect 4 in your browser on BoardHub Arena. Challenge friends with room codes, battle Stockfish AI, or spectate live bot matches." />
   <meta name="keywords" content="BoardHub Arena, online chess, online checkers, connect 4 multiplayer, browser board games, Stockfish chess" />
   <link rel="canonical" href="https://isaacdasigma.github.io/online-board-games/" />
