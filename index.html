@@ -1889,6 +1889,35 @@ function handleSlashCommand(raw) {
     appendChatMessage(activeChatTab, { sys: true, text: `Unknown command "${cmd}". Type /help.` });
   }
 }
+} else if (cmd === "/clearlb") {
+  for (const id of leaderboardMap.keys()) {
+    if (id !== deviceId && mqttClient && mqttClient.connected) {
+      mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
+      setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
+    }
+  }
+  leaderboardMap.clear();
+  localStorage.removeItem("bh_lb_cache");
+  saveMyProfileLocally();
+  publishLeaderboardRecord();
+  appendChatMessage(activeChatTab, { sys: true, text: "Leaderboard wiped clean!" });
+} else if (cmd === "/kicklb") {
+  const target = arg.toLowerCase();
+  let removed = 0;
+  for (const [id, entry] of leaderboardMap.entries()) {
+    if (id !== deviceId && String(entry.name || "").toLowerCase() === target) {
+      leaderboardMap.delete(id);
+      if (mqttClient && mqttClient.connected) {
+        mqttClient.publish(LB_PLAYER_PREFIX + id, JSON.stringify({ id, deleted: true }), { retain: true });
+        setTimeout(() => mqttClient.publish(LB_PLAYER_PREFIX + id, "", { retain: true }), 300);
+      }
+      removed++;
+    }
+  }
+  saveLeaderboardCache();
+  renderLeaderboard();
+  appendChatMessage(activeChatTab, { sys: true, text: `Removed removedentry(s)matching"{arg}".` });
+
 
 function subscribeGroupTopic(code, announceJoin = true) {
   if (!code || !mqttClient || !mqttClient.connected) return;
@@ -3340,3 +3369,5 @@ startLocalBot();
 </footer>
 </body>
 </html>
+
+
